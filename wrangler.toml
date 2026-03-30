@@ -1,0 +1,47 @@
+name = "k-hoed"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Static assets (built React SPA)
+[assets]
+directory = "./client/dist"
+binding = "ASSETS"
+
+# Durable Object binding
+[[durable_objects.bindings]]
+name        = "GAME_ROOM"
+class_name  = "GameRoom"
+
+# DO migrations
+[[migrations]]
+tag           = "v1"
+new_classes   = ["GameRoom"]
+
+# D1 database
+[[d1_databases]]
+binding       = "DB"
+database_name = "k-hoed-db"
+database_id   = "YOUR_D1_DATABASE_ID"   # replace after: wrangler d1 create k-hoed-db
+
+# R2 bucket
+[[r2_buckets]]
+binding     = "IMAGES"
+bucket_name = "k-hoed-images"
+
+# Static environment variables (non-secret)
+[vars]
+ENVIRONMENT    = "production"
+R2_PUBLIC_URL  = "https://images.k-hoed.example.com"   # replace with your R2 public URL
+
+# Secrets – set with:  wrangler secret put <NAME>
+#   JWT_SECRET
+#   TURNSTILE_SECRET_KEY
+
+# ── Local dev overrides ──────────────────────────────────────────────────────
+[env.dev]
+name = "k-hoed-dev"
+
+[env.dev.vars]
+ENVIRONMENT   = "development"
+R2_PUBLIC_URL = "http://localhost:8787/dev-images"

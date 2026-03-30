@@ -1,0 +1,52 @@
+{
+  "name": "k-hoed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production Kahoot-style quiz platform on Cloudflare",
+  "workspaces": ["client"],
+  "scripts": {
+    "dev": "concurrently -n worker,client -c blue,green \"npm run dev:worker\" \"npm run dev:client\"",
+    "dev:worker": "wrangler dev --port 8787",
+    "dev:client": "npm -w client run dev",
+    "build": "npm -w client run build",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dev": "npm run build && wrangler deploy --env dev",
+    "db:create": "wrangler d1 create k-hoed-db",
+    "db:migrate": "wrangler d1 migrations apply k-hoed-db",
+    "db:migrate:dev": "wrangler d1 migrations apply k-hoed-db --local",
+    "db:seed": "wrangler d1 execute k-hoed-db --file ./migrations/0002_seed.sql",
+    "db:seed:dev": "wrangler d1 execute k-hoed-db --local --file ./migrations/0002_seed.sql",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc --noEmit && npm -w client run type-check"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.3.0",
+    "hono": "^4.4.0",
+    "jose": "^5.3.0",
+    "zod": "^3.23.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240701.0",
+    "@playwright/test": "^1.44.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.6.0",
+    "prettier": "^3.3.2",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^3.62.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,679 @@
+import type { DurableObject } from "@cloudflare/workers-types";
+import { verifyJwt } from "../lib/auth.js";
+import { calculateScore, evaluateAnswer, buildLeaderboard } from "../lib/scoring.js";
+import { containsProfanity } from "../lib/profanity.js";
+import { newId } from "../lib/room-code.js";
+import {
+  getQuizWithQuestions,
+  getSessionById,
+  updateSessionStatus,
+  upsertSessionPlayer,
+  updatePlayerScore,
+  recordSubmission,
+} from "../lib/db.js";
+import type { Env } from "../worker-env.js";
+import type {
+  ClientMessage,
+  ServerMessage,
+  PlayerInMemory,
+  LeaderboardEntry,
+  SubmissionInMemory,
+  QuestionWithAnswers,
+  RoomPhase,
+} from "../types/index.js";
+import { SCORING } from "../lib/scoring.js";
+
+// ─── Persistent storage keys ──────────────────────────────────────────────────
+
+const S = {
+  PHASE: "phase",
+  SESSION_ID: "sessionId",
+  HOST_ID: "hostId",
+  QUIZ_ID: "quizId",
+  ROOM_CODE: "roomCode",
+  QUESTION_INDEX: "questionIndex",
+  QUESTION_START: "questionStartTime",
+  PLAYERS: "players", // JSON serialised Map entries
+  SUBMISSIONS: "submissions", // JSON serialised Map entries
+  PREV_SCORES: "prevScores",
+};
+
+type StoredPlayers = Array<[string, Omit<PlayerInMemory, "connected">]>;
+type StoredSubmissions = Array<[string, SubmissionInMemory[]]>; // questionId → []
+
+export class GameRoom implements DurableObject {
+  private env: Env;
+
+  // ── In-memory hot state ──────────────────────────────────────────────────
+  private phase: RoomPhase = "lobby";
+  private sessionId = "";
+  private hostId = "";
+  private quizId = "";
+  private roomCode = "";
+  private questions: QuestionWithAnswers[] = [];
+  private currentQuestionIndex = -1;
+  private questionStartTime = 0;
+  /** playerId → player data (without live WS ref) */
+  private players = new Map<string, PlayerInMemory>();
+  /** questionId → submissions array */
+  private submissions = new Map<string, SubmissionInMemory[]>();
+  /** playerId → score before current question */
+  private prevScores = new Map<string, number>();
+  private initialised = false;
+
+  constructor(
+    private readonly state: DurableObjectState,
+    env: Env,
+  ) {
+    this.env = env;
+  }
+
+  // ─── Cloudflare DO entry point ────────────────────────────────────────────
+
+  async fetch(request: Request): Promise<Response> {
+    await this.ensureInitialised();
+
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("Expected WebSocket upgrade", { status: 426 });
+    }
+
+    const url = new URL(request.url);
+    const role = url.searchParams.get("role"); // "host" | "player"
+    const sessionId = url.searchParams.get("sessionId") ?? "";
+    const authToken = url.searchParams.get("token") ?? "";
+    const displayName = (url.searchParams.get("displayName") ?? "").trim();
+    const playerId = url.searchParams.get("playerId") ?? "";
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
+
+    if (role === "host") {
+      const ok = await this.acceptHost(server, sessionId, authToken);
+      if (!ok) {
+        server.close(4001, "Unauthorised");
+        return new Response(null, { status: 101, webSocket: client });
+      }
+    } else if (role === "player") {
+      const ok = await this.acceptPlayer(server, sessionId, displayName, playerId);
+      if (!ok) {
+        server.close(4002, "Cannot join");
+        return new Response(null, { status: 101, webSocket: client });
+      }
+    } else {
+      return new Response("Invalid role", { status: 400 });
+    }
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // ─── Alarm (question timer expiry) ────────────────────────────────────────
+
+  async alarm(): Promise<void> {
+    await this.ensureInitialised();
+    if (this.phase === "question") {
+      await this.endCurrentQuestion();
+    }
+  }
+
+  // ─── WebSocket lifecycle ──────────────────────────────────────────────────
+
+  async webSocketMessage(ws: WebSocket, rawMessage: string | ArrayBuffer): Promise<void> {
+    await this.ensureInitialised();
+
+    let msg: ClientMessage;
+    try {
+      msg = JSON.parse(typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage)) as ClientMessage;
+    } catch {
+      this.sendTo(ws, { type: "error", message: "Invalid JSON" });
+      return;
+    }
+
+    const tags = this.state.getTags(ws);
+    const isHost = tags.includes("host");
+    const playerTag = tags.find((t) => t.startsWith("player:"));
+    const playerId = playerTag ? playerTag.slice(7) : null;
+
+    if (msg.type === "pong") return; // heartbeat response
+
+    if (isHost) {
+      await this.handleHostMessage(ws, msg);
+    } else if (playerId) {
+      await this.handlePlayerMessage(ws, playerId, msg);
+    }
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    await this.ensureInitialised();
+    const tags = this.state.getTags(ws);
+    const playerTag = tags.find((t) => t.startsWith("player:"));
+    if (playerTag) {
+      const playerId = playerTag.slice(7);
+      const player = this.players.get(playerId);
+      if (player) {
+        player.connected = false;
+        player.disconnectedAt = Date.now();
+        await this.persistPlayers();
+        this.broadcast({ type: "player_left", playerId, displayName: player.displayName });
+      }
+    }
+  }
+
+  async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
+    await this.webSocketClose(ws);
+  }
+
+  // ─── Connection acceptance ────────────────────────────────────────────────
+
+  private async acceptHost(
+    ws: WebSocket,
+    sessionId: string,
+    authToken: string,
+  ): Promise<boolean> {
+    const payload = await verifyJwt(authToken, this.env.JWT_SECRET);
+    if (!payload) return false;
+
+    const session = await getSessionById(this.env.DB, sessionId);
+    if (!session || session.host_id !== payload.sub) return false;
+    if (session.status === "ended") return false;
+
+    // Close any existing host ws
+    for (const existing of this.state.getWebSockets("host")) {
+      existing.close(4000, "New host connection");
+    }
+
+    this.state.acceptWebSocket(ws, ["host", `session:${sessionId}`]);
+
+    // Initialise room state if first connection
+    if (!this.sessionId) {
+      this.sessionId = session.id;
+      this.hostId = session.host_id;
+      this.quizId = session.quiz_id;
+      this.roomCode = session.room_code;
+
+      const quiz = await getQuizWithQuestions(this.env.DB, session.quiz_id);
+      if (!quiz || quiz.questions.length === 0) {
+        this.sendTo(ws, { type: "error", message: "Quiz has no questions", code: "NO_QUESTIONS" });
+        return false;
+      }
+      this.questions = quiz.questions;
+      await this.persistMeta();
+    }
+
+    // Send current room state to host
+    this.sendTo(ws, {
+      type: "room_state",
+      phase: this.phase,
+      playerCount: this.players.size,
+      currentQuestionIndex: this.currentQuestionIndex,
+      players: [...this.players.values()].map((p) => ({
+        id: p.id,
+        displayName: p.displayName,
+        score: p.score,
+        connected: p.connected,
+      })),
+    });
+
+    // Heartbeat ping every 20 s
+    this.schedulePing(ws);
+    return true;
+  }
+
+  private async acceptPlayer(
+    ws: WebSocket,
+    sessionId: string,
+    displayName: string,
+    existingPlayerId: string,
+  ): Promise<boolean> {
+    if (!displayName || displayName.length < 1 || displayName.length > 30) return false;
+
+    const session = await getSessionById(this.env.DB, sessionId);
+    if (!session || session.id !== this.sessionId) return false;
+    if (session.status === "ended") return false;
+
+    // Sanitise display name
+    const safeName = containsProfanity(displayName) ? "Player" : displayName;
+
+    let playerId: string;
+    const existing = existingPlayerId ? this.players.get(existingPlayerId) : null;
+
+    if (existing) {
+      // Reconnect: check window
+      const elapsed = existing.disconnectedAt
+        ? Date.now() - existing.disconnectedAt
+        : 0;
+      if (elapsed > SCORING.RECONNECT_WINDOW_MS && !existing.connected) {
+        // Too late to reconnect with the same identity, assign new id
+        playerId = newId();
+      } else {
+        playerId = existingPlayerId;
+        existing.connected = true;
+        existing.disconnectedAt = null;
+      }
+    } else {
+      if (this.phase !== "lobby") {
+        // Don't allow new joins mid-game
+        ws.close(4003, "Game already in progress");
+        return false;
+      }
+      playerId = newId();
+      this.players.set(playerId, {
+        id: playerId,
+        displayName: safeName,
+        score: 0,
+        connected: true,
+        disconnectedAt: null,
+      });
+
+      await upsertSessionPlayer(this.env.DB, {
+        id: playerId,
+        session_id: sessionId,
+        display_name: safeName,
+      });
+
+      this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, score: 0, connected: true } });
+    }
+
+    this.state.acceptWebSocket(ws, ["player", `player:${playerId}`]);
+
+    // Send current state to the joining/reconnecting player
+    this.sendTo(ws, {
+      type: "room_state",
+      phase: this.phase,
+      playerCount: this.players.size,
+      currentQuestionIndex: this.currentQuestionIndex,
+    });
+
+    if (this.phase === "question" && this.currentQuestionIndex >= 0) {
+      const q = this.questions[this.currentQuestionIndex]!;
+      this.sendTo(ws, {
+        type: "question_start",
+        question: this.buildQuestionPayload(q),
+        questionIndex: this.currentQuestionIndex,
+        totalQuestions: this.questions.length,
+        startTime: this.questionStartTime,
+        timeLimit: q.time_limit,
+      });
+    }
+
+    await this.persistPlayers();
+    this.schedulePing(ws);
+    return true;
+  }
+
+  // ─── Host message handling ────────────────────────────────────────────────
+
+  private async handleHostMessage(ws: WebSocket, msg: ClientMessage): Promise<void> {
+    switch (msg.type) {
+      case "start_game":
+        if (this.phase !== "lobby") {
+          this.sendTo(ws, { type: "error", message: "Game already started" });
+          return;
+        }
+        if (this.players.size === 0) {
+          this.sendTo(ws, { type: "error", message: "No players in the room" });
+          return;
+        }
+        await this.startGame();
+        break;
+
+      case "next_question":
+        if (this.phase !== "leaderboard" && this.phase !== "revealing") {
+          this.sendTo(ws, { type: "error", message: "Cannot go to next question now" });
+          return;
+        }
+        await this.advanceQuestion();
+        break;
+
+      case "show_leaderboard":
+        if (this.phase !== "revealing") {
+          this.sendTo(ws, { type: "error", message: "Not in revealing phase" });
+          return;
+        }
+        await this.showLeaderboard();
+        break;
+
+      case "end_game":
+        await this.endGame();
+        break;
+
+      case "kick_player": {
+        const player = this.players.get(msg.playerId);
+        if (!player) {
+          this.sendTo(ws, { type: "error", message: "Player not found" });
+          return;
+        }
+        for (const pws of this.state.getWebSockets(`player:${msg.playerId}`)) {
+          this.sendTo(pws, { type: "kicked", reason: "Removed by host" });
+          pws.close(4004, "Kicked");
+        }
+        this.players.delete(msg.playerId);
+        this.broadcast({ type: "player_left", playerId: msg.playerId, displayName: player.displayName });
+        await this.persistPlayers();
+        break;
+      }
+
+      default:
+        this.sendTo(ws, { type: "error", message: "Unknown message type" });
+    }
+  }
+
+  // ─── Player message handling ──────────────────────────────────────────────
+
+  private async handlePlayerMessage(
+    ws: WebSocket,
+    playerId: string,
+    msg: ClientMessage,
+  ): Promise<void> {
+    if (msg.type !== "submit_answer") return;
+
+    if (this.phase !== "question") {
+      this.sendTo(ws, { type: "error", message: "No active question", code: "NO_QUESTION" });
+      return;
+    }
+
+    const question = this.questions[this.currentQuestionIndex];
+    if (!question || question.id !== msg.questionId) {
+      this.sendTo(ws, { type: "error", message: "Wrong question ID", code: "WRONG_QUESTION" });
+      return;
+    }
+
+    const qSubmissions = this.submissions.get(question.id) ?? [];
+    const alreadyAnswered = qSubmissions.some((s) => s.playerId === playerId);
+    if (alreadyAnswered) {
+      this.sendTo(ws, { type: "error", message: "Already answered", code: "DUPLICATE" });
+      return;
+    }
+
+    const now = Date.now();
+    const serverResponseMs = now - this.questionStartTime;
+    const timeLimitMs = question.time_limit * 1000;
+
+    // Reject late submissions
+    if (serverResponseMs > timeLimitMs + 500) {
+      this.sendTo(ws, { type: "error", message: "Time expired", code: "LATE" });
+      return;
+    }
+
+    const correctIds = question.answer_options
+      .filter((a) => a.is_correct)
+      .map((a) => a.id);
+
+    const isCorrect = evaluateAnswer(msg.answerIds, correctIds, question.type);
+    const responseMs = Math.min(serverResponseMs, timeLimitMs);
+    const points = calculateScore(question.points, question.time_limit, responseMs, isCorrect);
+
+    const submission: SubmissionInMemory = {
+      playerId,
+      answerIds: msg.answerIds,
+      responseTimeMs: responseMs,
+      isCorrect,
+      pointsEarned: points,
+    };
+
+    qSubmissions.push(submission);
+    this.submissions.set(question.id, qSubmissions);
+
+    const player = this.players.get(playerId);
+    if (player) {
+      player.score += points;
+    }
+
+    // Record in D1 (non-blocking)
+    void recordSubmission(this.env.DB, {
+      id: newId(),
+      session_id: this.sessionId,
+      player_id: playerId,
+      question_id: question.id,
+      answer_option_ids: JSON.stringify(msg.answerIds),
+      is_correct: isCorrect ? 1 : 0,
+      points_earned: points,
+      response_time_ms: responseMs,
+    });
+
+    // Send result to player
+    this.sendTo(ws, {
+      type: "answer_result",
+      correct: isCorrect,
+      pointsEarned: points,
+      totalScore: player?.score ?? 0,
+    });
+
+    // Notify host of progress
+    this.broadcastTo("host", {
+      type: "answer_received",
+      answerCount: qSubmissions.length,
+      totalPlayers: this.players.size,
+    });
+
+    // Auto-end question when all players have answered
+    if (qSubmissions.length >= this.players.size) {
+      await this.state.storage.deleteAlarm();
+      await this.endCurrentQuestion();
+    }
+  }
+
+  // ─── Game flow ────────────────────────────────────────────────────────────
+
+  private async startGame(): Promise<void> {
+    this.phase = "question";
+    this.currentQuestionIndex = 0;
+
+    await updateSessionStatus(this.env.DB, this.sessionId, "active", { started_at: Date.now() });
+    this.broadcast({ type: "game_started" });
+    await this.broadcastQuestion();
+  }
+
+  private async broadcastQuestion(): Promise<void> {
+    const q = this.questions[this.currentQuestionIndex]!;
+    this.questionStartTime = Date.now();
+
+    // Snapshot scores before this question
+    this.prevScores = new Map(
+      [...this.players.entries()].map(([id, p]) => [id, p.score]),
+    );
+
+    // Set alarm for auto-end
+    await this.state.storage.setAlarm(this.questionStartTime + q.time_limit * 1000 + 500);
+
+    this.broadcast({
+      type: "question_start",
+      question: this.buildQuestionPayload(q),
+      questionIndex: this.currentQuestionIndex,
+      totalQuestions: this.questions.length,
+      startTime: this.questionStartTime,
+      timeLimit: q.time_limit,
+    });
+
+    await this.persistMeta();
+  }
+
+  private async endCurrentQuestion(): Promise<void> {
+    if (this.phase !== "question") return;
+    this.phase = "revealing";
+
+    const q = this.questions[this.currentQuestionIndex]!;
+    const correctIds = q.answer_options.filter((a) => a.is_correct).map((a) => a.id);
+
+    // Build answer distribution
+    const distribution: Record<string, number> = {};
+    for (const opt of q.answer_options) distribution[opt.id] = 0;
+    for (const sub of this.submissions.get(q.id) ?? []) {
+      for (const aid of sub.answerIds) {
+        if (aid in distribution) distribution[aid]!++;
+      }
+    }
+
+    // Update D1 player scores
+    for (const p of this.players.values()) {
+      void updatePlayerScore(this.env.DB, p.id, p.score);
+    }
+
+    this.broadcast({ type: "question_end", correctAnswerIds: correctIds, distribution });
+    await this.persistMeta();
+  }
+
+  private async showLeaderboard(): Promise<void> {
+    this.phase = "leaderboard";
+    const entries = this.buildCurrentLeaderboard();
+    this.broadcast({ type: "leaderboard", entries, questionIndex: this.currentQuestionIndex });
+    await this.persistMeta();
+  }
+
+  private async advanceQuestion(): Promise<void> {
+    this.currentQuestionIndex += 1;
+
+    if (this.currentQuestionIndex >= this.questions.length) {
+      await this.endGame();
+      return;
+    }
+
+    this.phase = "question";
+    await this.broadcastQuestion();
+  }
+
+  private async endGame(): Promise<void> {
+    this.phase = "ended";
+    await this.state.storage.deleteAlarm();
+    await updateSessionStatus(this.env.DB, this.sessionId, "ended", { ended_at: Date.now() });
+
+    const finalLeaderboard = this.buildCurrentLeaderboard();
+    this.broadcast({ type: "game_ended", finalLeaderboard });
+
+    // Persist final state
+    await this.persistMeta();
+
+    // Close all connections gracefully after a short delay
+    setTimeout(() => {
+      for (const ws of this.state.getWebSockets()) {
+        ws.close(1000, "Game over");
+      }
+    }, 5000);
+  }
+
+  // ─── Broadcast helpers ────────────────────────────────────────────────────
+
+  private send(ws: WebSocket, msg: ServerMessage): void {
+    try {
+      ws.send(JSON.stringify(msg));
+    } catch {
+      // WebSocket may already be closed
+    }
+  }
+
+  private sendTo(ws: WebSocket, msg: ServerMessage): void {
+    this.send(ws, msg);
+  }
+
+  private broadcast(msg: ServerMessage): void {
+    for (const ws of this.state.getWebSockets()) {
+      this.send(ws, msg);
+    }
+  }
+
+  private broadcastTo(tag: string, msg: ServerMessage): void {
+    for (const ws of this.state.getWebSockets(tag)) {
+      this.send(ws, msg);
+    }
+  }
+
+  private broadcastToPlayers(msg: ServerMessage): void {
+    for (const ws of this.state.getWebSockets("player")) {
+      this.send(ws, msg);
+    }
+  }
+
+  // ─── Heartbeat ────────────────────────────────────────────────────────────
+
+  private schedulePing(ws: WebSocket): void {
+    const interval = setInterval(() => {
+      try {
+        ws.send(JSON.stringify({ type: "ping" }));
+      } catch {
+        clearInterval(interval);
+      }
+    }, 20_000);
+  }
+
+  // ─── State helpers ────────────────────────────────────────────────────────
+
+  private buildQuestionPayload(q: QuestionWithAnswers) {
+    return {
+      id: q.id,
+      text: q.text,
+      imageUrl: q.image_url,
+      type: q.type,
+      answerOptions: q.answer_options.map((a) => ({ id: a.id, text: a.text })),
+    };
+  }
+
+  private buildCurrentLeaderboard(): LeaderboardEntry[] {
+    return buildLeaderboard(
+      [...this.players.values()].map((p) => ({
+        id: p.id,
+        displayName: p.displayName,
+        score: p.score,
+      })),
+      this.prevScores,
+    );
+  }
+
+  // ─── DO storage persistence ───────────────────────────────────────────────
+
+  private async ensureInitialised(): Promise<void> {
+    if (this.initialised) return;
+    this.initialised = true;
+    await this.state.blockConcurrencyWhile(async () => {
+      await this.loadState();
+    });
+  }
+
+  private async loadState(): Promise<void> {
+    const stored = await this.state.storage.list<unknown>();
+
+    this.phase = (stored.get(S.PHASE) as RoomPhase | undefined) ?? "lobby";
+    this.sessionId = (stored.get(S.SESSION_ID) as string | undefined) ?? "";
+    this.hostId = (stored.get(S.HOST_ID) as string | undefined) ?? "";
+    this.quizId = (stored.get(S.QUIZ_ID) as string | undefined) ?? "";
+    this.roomCode = (stored.get(S.ROOM_CODE) as string | undefined) ?? "";
+    this.currentQuestionIndex = (stored.get(S.QUESTION_INDEX) as number | undefined) ?? -1;
+    this.questionStartTime = (stored.get(S.QUESTION_START) as number | undefined) ?? 0;
+
+    const playersData = (stored.get(S.PLAYERS) as StoredPlayers | undefined) ?? [];
+    this.players = new Map(
+      playersData.map(([id, p]) => [id, { ...p, connected: false }]),
+    );
+
+    const subsData = (stored.get(S.SUBMISSIONS) as StoredSubmissions | undefined) ?? [];
+    this.submissions = new Map(subsData);
+
+    const prevData = (stored.get(S.PREV_SCORES) as [string, number][] | undefined) ?? [];
+    this.prevScores = new Map(prevData);
+
+    // Reload questions from D1 if we have a quiz
+    if (this.quizId) {
+      const quiz = await getQuizWithQuestions(this.env.DB, this.quizId);
+      this.questions = quiz?.questions ?? [];
+    }
+  }
+
+  private async persistMeta(): Promise<void> {
+    await this.state.storage.put({
+      [S.PHASE]: this.phase,
+      [S.SESSION_ID]: this.sessionId,
+      [S.HOST_ID]: this.hostId,
+      [S.QUIZ_ID]: this.quizId,
+      [S.ROOM_CODE]: this.roomCode,
+      [S.QUESTION_INDEX]: this.currentQuestionIndex,
+      [S.QUESTION_START]: this.questionStartTime,
+      [S.PREV_SCORES]: [...this.prevScores.entries()],
+    });
+  }
+
+  private async persistPlayers(): Promise<void> {
+    const data: StoredPlayers = [...this.players.entries()].map(([id, p]) => [
+      id,
+      { id: p.id, displayName: p.displayName, score: p.score, disconnectedAt: p.disconnectedAt },
+    ]);
+    await this.state.storage.put(S.PLAYERS, data);
+  }
+}
