@@ -43,10 +43,21 @@ const quizCreateSchema = z.object({
   title: z.string().min(1).max(200).trim(),
   description: z.string().max(1000).trim().nullable().optional(),
   is_public: z.boolean().default(false),
-  questions: z.array(questionSchema).min(1).max(100).optional().default([]),
+  questions: z.array(questionSchema).max(100).optional().default([]),
 });
 
 const quizUpdateSchema = quizCreateSchema.partial();
+
+// Serialize Zod validation errors to a readable string for the client
+function zodHook<T>(
+  result: { success: boolean; error?: import("zod").ZodError; data?: T },
+  c: import("hono").Context,
+): Response | void {
+  if (!result.success && result.error) {
+    const msg = result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    return c.json({ success: false, error: msg }, 400) as unknown as Response;
+  }
+}
 
 // ─── GET /quizzes ─────────────────────────────────────────────────────────────
 
@@ -58,7 +69,7 @@ app.get("/", async (c) => {
 
 // ─── POST /quizzes ────────────────────────────────────────────────────────────
 
-app.post("/", zValidator("json", quizCreateSchema), async (c) => {
+app.post("/", zValidator("json", quizCreateSchema, zodHook), async (c) => {
   const user = c.get("user");
   const body = c.req.valid("json");
 
@@ -100,10 +111,10 @@ app.get("/:id", async (c) => {
 
 // ─── PUT /quizzes/:id ─────────────────────────────────────────────────────────
 
-app.put("/:id", zValidator("json", quizUpdateSchema), async (c) => {
+app.put("/:id", zValidator("json", quizUpdateSchema, zodHook), async (c) => {
   const user = c.get("user");
   const body = c.req.valid("json");
-  const quizId = c.req.param("id");
+  const quizId = c.req.param("id") as string;
 
   const quiz = await getQuizById(c.env.DB, quizId);
   if (!quiz) return c.json({ success: false, error: "Quiz not found" }, 404);
@@ -198,7 +209,7 @@ app.get("/:id/export", async (c) => {
 
 // ─── POST /quizzes/import ─────────────────────────────────────────────────────
 
-app.post("/import", zValidator("json", quizCreateSchema), async (c) => {
+app.post("/import", zValidator("json", quizCreateSchema, zodHook), async (c) => {
   const user = c.get("user");
   const body = c.req.valid("json");
 

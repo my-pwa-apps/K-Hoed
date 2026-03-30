@@ -9,8 +9,15 @@ import { requireAuth } from "../middleware/auth.js";
 import type { Env } from "../worker-env.js";
 
 const app = new Hono<{ Bindings: Env }>();
-
-// ─── Register ─────────────────────────────────────────────────────────────────
+function zodHook<T>(
+  result: { success: boolean; error?: import("zod").ZodError; data?: T },
+  c: import("hono").Context,
+): Response | void {
+  if (!result.success && result.error) {
+    const msg = result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    return c.json({ success: false, error: msg }, 400) as unknown as Response;
+  }
+}
 
 const registerSchema = z.object({
   email: z.string().email().max(254),
@@ -19,7 +26,7 @@ const registerSchema = z.object({
   turnstile_token: z.string().optional(),
 });
 
-app.post("/register", zValidator("json", registerSchema), async (c) => {
+app.post("/register", zValidator("json", registerSchema, zodHook), async (c) => {
   // Rate-limit per IP: 5 registrations per minute
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
   if (!checkRateLimit(`register:${ip}`, 5, 60_000)) {
@@ -72,7 +79,7 @@ const loginSchema = z.object({
   turnstile_token: z.string().optional(),
 });
 
-app.post("/login", zValidator("json", loginSchema), async (c) => {
+app.post("/login", zValidator("json", loginSchema, zodHook), async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
   if (!checkRateLimit(`login:${ip}`, 10, 60_000)) {
     return c.json({ success: false, error: "Too many requests" }, 429);

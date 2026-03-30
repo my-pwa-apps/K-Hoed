@@ -1,0 +1,32 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { Zap, Users, BarChart3, Smartphone, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { useAuthStore } from "@/stores/authStore";
+export default function Landing() {
+    const isAuthenticated = useAuthStore((s) => !!s.token);
+    return (_jsxs("div", { className: "min-h-screen bg-gradient-to-br from-brand-950 via-brand-800 to-accent-600 text-white overflow-hidden", children: [_jsxs("nav", { className: "flex items-center justify-between px-6 py-5 max-w-6xl mx-auto", children: [_jsxs("span", { className: "font-display font-bold text-2xl flex items-center gap-2", children: [_jsx("span", { "aria-hidden": true, children: "\uD83C\uDFAF" }), " K-Hoed"] }), _jsx("div", { className: "flex items-center gap-3", children: isAuthenticated ? (_jsx(Link, { to: "/dashboard", children: _jsx(Button, { variant: "secondary", size: "sm", children: "Dashboard" }) })) : (_jsxs(_Fragment, { children: [_jsx(Link, { to: "/login", children: _jsx(Button, { variant: "ghost", size: "sm", className: "text-white hover:bg-white/10", children: "Log in" }) }), _jsx(Link, { to: "/register", children: _jsx(Button, { variant: "secondary", size: "sm", children: "Sign up free" }) })] })) })] }), _jsxs("main", { className: "max-w-5xl mx-auto px-6 pt-16 pb-24 text-center", children: [_jsxs(motion.div, { initial: { opacity: 0, y: 30 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6 }, children: [_jsxs("div", { className: "inline-flex items-center gap-2 bg-white/10 rounded-full px-4 py-1.5 text-sm font-medium mb-6", children: [_jsx(Zap, { size: 14, className: "text-accent-400" }), "Real-time multiplayer quizzes"] }), _jsxs("h1", { className: "font-display font-extrabold text-5xl sm:text-7xl leading-tight mb-6 text-shadow", children: ["Host live quizzes ", _jsx("br", {}), _jsx("span", { className: "text-accent-400", children: "your crowd will love" })] }), _jsx("p", { className: "text-xl text-white/75 max-w-2xl mx-auto mb-10", children: "Create a quiz, share the room code, and watch players answer in real time on any device. Instant scoring, live leaderboards, and zero setup." }), _jsxs("div", { className: "flex flex-col sm:flex-row gap-4 justify-center", children: [_jsx(Link, { to: "/register", children: _jsxs(Button, { size: "xl", className: "bg-accent-500 hover:bg-accent-600 text-white shadow-xl", children: ["Create a quiz free", _jsx(ArrowRight, { size: 20 })] }) }), _jsx(Link, { to: "/join", children: _jsx(Button, { size: "xl", variant: "ghost", className: "text-white border-2 border-white/30 hover:bg-white/10", children: "Join a game" }) })] })] }), _jsx(motion.div, { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { delay: 0.3, duration: 0.6 }, className: "mt-24 grid sm:grid-cols-2 lg:grid-cols-4 gap-6 text-left", children: FEATURES.map((f, i) => (_jsxs(motion.div, { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 }, transition: { delay: 0.4 + i * 0.1 }, className: "bg-white/10 backdrop-blur-sm rounded-2xl p-5", children: [_jsx("div", { className: "text-accent-400 mb-3", children: f.icon }), _jsx("h3", { className: "font-semibold text-lg mb-1", children: f.title }), _jsx("p", { className: "text-white/65 text-sm", children: f.description })] }, f.title))) })] }), _jsx("footer", { className: "text-center pb-8 text-white/40 text-sm", children: "Built on Cloudflare \u00B7 K-Hoed" })] }));
+}
+const FEATURES = [
+    {
+        icon: _jsx(Zap, { size: 24 }),
+        title: "Instant play",
+        description: "Players join in seconds via a 6-character room code. No app required.",
+    },
+    {
+        icon: _jsx(Users, { size: 24 }),
+        title: "Multiplayer rooms",
+        description: "Handle dozens of players simultaneously with real-time WebSocket sync.",
+    },
+    {
+        icon: _jsx(BarChart3, { size: 24 }),
+        title: "Live analytics",
+        description: "See answer distributions and leaderboards update after every question.",
+    },
+    {
+        icon: _jsx(Smartphone, { size: 24 }),
+        title: "Mobile-first",
+        description: "Big buttons, high contrast — designed for phones as much as desktops.",
+    },
+];

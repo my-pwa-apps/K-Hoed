@@ -22,7 +22,7 @@ new_classes   = ["GameRoom"]
 [[d1_databases]]
 binding       = "DB"
 database_name = "k-hoed-db"
-database_id   = "YOUR_D1_DATABASE_ID"   # replace after: wrangler d1 create k-hoed-db
+database_id   = "fed1ec53-683f-4b7b-a3f9-dcde5b3f1e29"
 
 # R2 bucket
 [[r2_buckets]]

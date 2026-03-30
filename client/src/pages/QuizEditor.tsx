@@ -177,11 +177,26 @@ export default function QuizEditor() {
         { id: newLocalId(), text: "True", is_correct: true, order_index: 0 },
         { id: newLocalId(), text: "False", is_correct: false, order_index: 1 },
       ];
-    } else if (type === "classic" && options.length < 2) {
-      options = [
-        { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
-        { id: newLocalId(), text: "", is_correct: false, order_index: 1 },
-      ];
+    } else if (type === "classic") {
+      // Ensure exactly one correct answer — keep the first currently-correct one
+      let foundCorrect = false;
+      options = options.map((a) => {
+        if (a.is_correct && !foundCorrect) {
+          foundCorrect = true;
+          return a;
+        }
+        return { ...a, is_correct: false };
+      });
+      // If none were correct, mark the first one
+      if (!foundCorrect && options.length > 0) {
+        options = [{ ...options[0]!, is_correct: true }, ...options.slice(1)];
+      }
+      if (options.length < 2) {
+        options = [
+          { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
+          { id: newLocalId(), text: "", is_correct: false, order_index: 1 },
+        ];
+      }
     }
     updateQuestion(qi, { type, answer_options: options });
   };

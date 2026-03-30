@@ -16,12 +16,22 @@ import type { Env } from "../worker-env.js";
 
 const app = new Hono<{ Bindings: Env }>();
 
+function zodHook<T>(
+  result: { success: boolean; error?: import("zod").ZodError; data?: T },
+  c: import("hono").Context,
+): Response | void {
+  if (!result.success && result.error) {
+    const msg = result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join("; ");
+    return c.json({ success: false, error: msg }, 400) as unknown as Response;
+  }
+}
+
 // ─── POST /games — Create session (host only) ─────────────────────────────────
 
 app.post(
   "/",
   requireAuth,
-  zValidator("json", z.object({ quiz_id: z.string().uuid() })),
+  zValidator("json", z.object({ quiz_id: z.string().uuid() }), zodHook),
   async (c) => {
     const user = c.get("user");
     const { quiz_id } = c.req.valid("json");
