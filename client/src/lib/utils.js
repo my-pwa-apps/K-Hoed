@@ -73,3 +73,15 @@ export function getAvatarColor(id) {
     }
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
+/** 40 fun emoji avatars for players to choose from */
+export const AVATARS = [
+    // Animals
+    "🦊", "🐼", "🦁", "🐯", "🐻", "🦝", "🐨", "🐸",
+    "🐧", "🦉", "🦆", "🐙", "🦈", "🦋", "🐬", "🦄",
+    // Food & fun
+    "🍕", "🌮", "🍣", "🧁", "🍦", "🎂", "🍩", "🌈",
+    // Objects
+    "🚀", "🎸", "🎮", "🎯", "🏆", "⚡", "🔮", "🎪",
+    // Faces
+    "😎", "🤩", "🥳", "😈", "🤖", "👾", "🎭", "🤡",
+];

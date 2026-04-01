@@ -1,13 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, Copy, Play } from "lucide-react";
+import { Users, Copy, Play, Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useGameStore, initHostGame } from "@/stores/gameStore";
 import { useHostGame } from "@/hooks/useGame";
 import { useAuthStore } from "@/stores/authStore";
 import { gameApi } from "@/lib/api";
+import { useI18n, plural } from "@/i18n";
 import { getAvatarColor } from "@/lib/utils";
 
 export default function HostLobby() {
@@ -45,6 +46,8 @@ export default function HostLobby() {
     roomCode,
     token,
   });
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
 
   const players = store.role === "host" ? store.players : [];
   void store.phase;
@@ -57,10 +60,12 @@ export default function HostLobby() {
 
   const copyCode = () => {
     void navigator.clipboard.writeText(roomCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!roomCode) {
-    return <div className="text-center py-20 text-gray-400">Loading room…</div>;
+    return <div className="text-center py-20 text-white/40">{t.common.loading}</div>;
   }
 
   return (
@@ -68,7 +73,7 @@ export default function HostLobby() {
       <div className="w-full max-w-2xl space-y-6">
         {/* Room code */}
         <div className="text-center">
-          <p className="text-white/70 text-sm font-medium mb-1">Players join at</p>
+          <p className="text-white/70 text-sm font-medium mb-1">{t.lobby.share_hint}</p>
           <p className="text-white font-medium text-lg mb-2">
             {location.origin}/join
           </p>
@@ -78,10 +83,10 @@ export default function HostLobby() {
             </span>
             <button
               onClick={copyCode}
-              aria-label="Copy room code"
+              aria-label={t.lobby.copy_code}
               className="p-2 rounded-xl bg-white/20 text-white hover:bg-white/30 transition"
             >
-              <Copy size={20} />
+              {copied ? <Check size={20} aria-hidden /> : <Copy size={20} aria-hidden />}
             </button>
           </div>
         </div>
@@ -90,8 +95,8 @@ export default function HostLobby() {
         <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-white font-semibold flex items-center gap-2">
-              <Users size={18} />
-              Players ({players.length})
+              <Users size={18} aria-hidden />
+              {plural(t.lobby, "players", players.length)}
             </h2>
             <span
               className={`text-xs font-medium px-2 py-1 rounded-full ${
@@ -115,10 +120,10 @@ export default function HostLobby() {
                   className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2"
                 >
                   <div
-                    className={`w-7 h-7 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 ${getAvatarColor(p.id)}`}
+                    className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${p.avatarEmoji ? "" : getAvatarColor(p.id)} text-white`}
                     aria-hidden
                   >
-                    {p.displayName[0]?.toUpperCase()}
+                    {p.avatarEmoji ?? p.displayName[0]?.toUpperCase()}
                   </div>
                   <span className="text-white text-sm font-medium truncate">{p.displayName}</span>
                 </motion.div>
@@ -127,7 +132,7 @@ export default function HostLobby() {
 
             {players.length === 0 && (
               <div className="col-span-3 text-center text-white/40 py-4 text-sm">
-                Waiting for players to join…
+                {t.lobby.players_zero}
               </div>
             )}
           </div>
@@ -141,8 +146,8 @@ export default function HostLobby() {
           onClick={handleStart}
           disabled={players.length === 0 || status !== "open"}
         >
-          <Play size={24} />
-          Start game ({players.length} {players.length === 1 ? "player" : "players"})
+          <Play size={24} aria-hidden />
+          {t.lobby.start_game} &mdash; {plural(t.lobby, "players", players.length)}
         </Button>
       </div>
     </div>

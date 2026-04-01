@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload, Lightbulb, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { quizApi, uploadApi } from "@/lib/api";
-import type { QuestionType } from "@/lib/types";
-import { newLocalId } from "./QuizEditor.utils";
+import type { QuestionType, QuestionConfig, SliderConfig, PinAnswerConfig, BrainstormItem, BrainstormStatus } from "@/lib/types";
+import { newLocalId } from "@/pages/QuizEditor.utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,8 +26,37 @@ interface DraftQuestion {
   time_limit: number;
   points: number;
   order_index: number;
-  answer_options: DraftAnswer[];
-  _expanded: boolean;
+  answer_options: DraftAnswer[];  config: QuestionConfig | null;  _expanded: boolean;
+}
+
+function createDraftQuestion(orderIndex: number, text = ""): DraftQuestion {
+  return {
+    id: newLocalId(),
+    text,
+    image_url: null,
+    type: "classic",
+    time_limit: 20,
+    points: 1000,
+    order_index: orderIndex,
+    answer_options: [
+      { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
+      { id: newLocalId(), text: "", is_correct: false, order_index: 1 },
+      { id: newLocalId(), text: "", is_correct: false, order_index: 2 },
+      { id: newLocalId(), text: "", is_correct: false, order_index: 3 },
+    ],
+    config: null,
+    _expanded: true,
+  };
+}
+
+function createBrainstormItem(): BrainstormItem {
+  return {
+    id: newLocalId(),
+    text: "",
+    notes: null,
+    suggested_by: null,
+    status: "proposed",
+  };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -42,6 +71,7 @@ export default function QuizEditor() {
   const [description, setDescription] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [questions, setQuestions] = useState<DraftQuestion[]>([]);
+  const [brainstorm, setBrainstorm] = useState<BrainstormItem[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Load existing quiz
@@ -63,10 +93,12 @@ export default function QuizEditor() {
       setTitle(existing.title);
       setDescription(existing.description ?? "");
       setIsPublic(existing.is_public);
+      setBrainstorm(existing.brainstorm ?? []);
       setQuestions(
         (existing.questions ?? []).map((q) => ({
           ...q,
           id: q.id ?? newLocalId(),
+          config: (q.config as QuestionConfig | null | undefined) ?? null,
           _expanded: false,
           answer_options: q.answer_options as DraftAnswer[],
         })),
@@ -82,6 +114,14 @@ export default function QuizEditor() {
         title: title.trim(),
         description: description.trim() || null,
         is_public: isPublic,
+        brainstorm: brainstorm
+          .map((item) => ({
+            ...item,
+            text: item.text.trim(),
+            notes: item.notes?.trim() || null,
+            suggested_by: item.suggested_by?.trim() || null,
+          }))
+          .filter((item) => item.text.length > 0),
         questions: questions.map((q, qi) => ({
           id: q.id.startsWith("local-") ? undefined : q.id,
           text: q.text,
@@ -90,6 +130,7 @@ export default function QuizEditor() {
           time_limit: q.time_limit,
           points: q.points,
           order_index: qi,
+          config: q.config ?? undefined,
           answer_options: q.answer_options.map((a, ai) => ({
             id: a.id.startsWith("local-") ? undefined : a.id,
             text: a.text,
@@ -111,23 +152,7 @@ export default function QuizEditor() {
   // ── Question helpers ─────────────────────────────────────────────────────
 
   const addQuestion = () => {
-    const q: DraftQuestion = {
-      id: newLocalId(),
-      text: "",
-      image_url: null,
-      type: "classic",
-      time_limit: 20,
-      points: 1000,
-      order_index: questions.length,
-      answer_options: [
-        { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
-        { id: newLocalId(), text: "", is_correct: false, order_index: 1 },
-        { id: newLocalId(), text: "", is_correct: false, order_index: 2 },
-        { id: newLocalId(), text: "", is_correct: false, order_index: 3 },
-      ],
-      _expanded: true,
-    };
-    setQuestions((prev) => [...prev, q]);
+    setQuestions((prev) => [...prev, createDraftQuestion(prev.length)]);
   };
 
   const removeQuestion = (idx: number) =>
@@ -172,13 +197,32 @@ export default function QuizEditor() {
   const changeType = (qi: number, type: QuestionType) => {
     const q = questions[qi]!;
     let options = q.answer_options;
+    let config: QuestionConfig | null = null;
     if (type === "truefalse") {
       options = [
         { id: newLocalId(), text: "True", is_correct: true, order_index: 0 },
         { id: newLocalId(), text: "False", is_correct: false, order_index: 1 },
       ];
+    } else if (type === "slider") {
+      options = [];
+      config = { min: 0, max: 100, step: 1, correct: 50, tolerance: 5 } as SliderConfig;
+    } else if (type === "pinanswer") {
+      options = [];
+      config = { hotspotX: 0.5, hotspotY: 0.5, hotspotRadius: 0.1 } as PinAnswerConfig;
+    } else if (type === "typeanswer") {
+      // Correct answers are the acceptable text answers
+      options = [
+        { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
+      ];
+    } else if (type === "puzzle") {
+      // All items are part of the puzzle; correct order = array order
+      options = (options.length >= 2 ? options : [
+        { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
+        { id: newLocalId(), text: "", is_correct: true, order_index: 1 },
+        { id: newLocalId(), text: "", is_correct: true, order_index: 2 },
+      ]).map((a) => ({ ...a, is_correct: true }));
     } else if (type === "classic") {
-      // Ensure exactly one correct answer — keep the first currently-correct one
+      // Ensure exactly one correct answer
       let foundCorrect = false;
       options = options.map((a) => {
         if (a.is_correct && !foundCorrect) {
@@ -187,7 +231,6 @@ export default function QuizEditor() {
         }
         return { ...a, is_correct: false };
       });
-      // If none were correct, mark the first one
       if (!foundCorrect && options.length > 0) {
         options = [{ ...options[0]!, is_correct: true }, ...options.slice(1)];
       }
@@ -198,8 +241,36 @@ export default function QuizEditor() {
         ];
       }
     }
-    updateQuestion(qi, { type, answer_options: options });
+    updateQuestion(qi, { type, answer_options: options, config });
   };
+
+  const addBrainstormItemRow = () => {
+    setBrainstorm((prev) => [...prev, createBrainstormItem()]);
+  };
+
+  const updateBrainstormItem = (idx: number, patch: Partial<BrainstormItem>) => {
+    setBrainstorm((prev) => prev.map((item, i) => (i === idx ? { ...item, ...patch } : item)));
+  };
+
+  const removeBrainstormItem = (idx: number) => {
+    setBrainstorm((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const convertIdeaToQuestion = (idx: number) => {
+    const item = brainstorm[idx];
+    if (!item?.text.trim()) return;
+
+    setQuestions((prev) => [...prev, createDraftQuestion(prev.length, item.text.trim())]);
+    updateBrainstormItem(idx, { status: "added" });
+  };
+
+  const brainstormCounts = brainstorm.reduce(
+    (acc, item) => {
+      acc[item.status] += 1;
+      return acc;
+    },
+    { proposed: 0, shortlisted: 0, added: 0 } as Record<BrainstormStatus, number>,
+  );
 
   if (!isNew && isLoading) {
     return <div className="text-gray-400 text-center py-20">Loading quiz…</div>;
@@ -259,6 +330,112 @@ export default function QuizEditor() {
               Make quiz publicly discoverable
             </span>
           </label>
+        </div>
+      </Card>
+
+      <Card className="border border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+        <div className="space-y-5">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 text-amber-700 mb-1">
+                <Lightbulb size={18} />
+                <h2 className="font-display font-bold text-xl text-gray-900">Brainstorm area</h2>
+              </div>
+              <p className="text-sm text-gray-600 max-w-2xl">
+                Park ideas here before they become real quiz questions. Shortlist the strongest ones,
+                then move them into the game when you are ready.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+              <span className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600">
+                {brainstormCounts.proposed} proposed
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
+                {brainstormCounts.shortlisted} shortlisted
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                {brainstormCounts.added} added to quiz
+              </span>
+            </div>
+          </div>
+
+          {brainstorm.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-amber-300 bg-white/70 p-6 text-center text-sm text-gray-500">
+              No ideas yet. Start capturing rough question prompts, funny twists, or topics to agree on later.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {brainstorm.map((item, index) => (
+                <div key={item.id} className="rounded-2xl border border-amber-200 bg-white p-4 space-y-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
+                      <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
+                        {index + 1}
+                      </span>
+                      Idea
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        className="input py-2 text-sm min-w-[150px]"
+                        value={item.status}
+                        onChange={(e) => updateBrainstormItem(index, { status: e.target.value as BrainstormStatus })}
+                        aria-label={`Brainstorm status ${index + 1}`}
+                      >
+                        <option value="proposed">Proposed</option>
+                        <option value="shortlisted">Shortlisted</option>
+                        <option value="added">Added to quiz</option>
+                      </select>
+                      <Button
+                        type="button"
+                        variant={item.status === "added" ? "secondary" : "outline"}
+                        size="sm"
+                        onClick={() => convertIdeaToQuestion(index)}
+                        disabled={!item.text.trim()}
+                      >
+                        {item.status === "added" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
+                        {item.status === "added" ? "Question created" : "Turn into question"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-danger-500 hover:text-danger-700 hover:bg-danger-50"
+                        onClick={() => removeBrainstormItem(index)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Idea"
+                    placeholder="e.g. Should we do a round about weird Dutch traditions?"
+                    value={item.text}
+                    onChange={(e) => updateBrainstormItem(index, { text: e.target.value })}
+                  />
+
+                  <div className="grid sm:grid-cols-[minmax(0,1fr)_180px] gap-3">
+                    <Textarea
+                      label="Notes"
+                      placeholder="Add angle, possible answers, jokes, or concerns to discuss later"
+                      value={item.notes ?? ""}
+                      onChange={(e) => updateBrainstormItem(index, { notes: e.target.value || null })}
+                    />
+                    <Input
+                      label="Suggested by"
+                      placeholder="Name"
+                      value={item.suggested_by ?? ""}
+                      onChange={(e) => updateBrainstormItem(index, { suggested_by: e.target.value || null })}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button type="button" variant="outline" onClick={addBrainstormItemRow}>
+            <Plus size={16} /> Add brainstorm idea
+          </Button>
         </div>
       </Card>
 
@@ -393,6 +570,10 @@ function QuestionCard({
                 <option value="classic">Single answer</option>
                 <option value="multiple">Multiple answers</option>
                 <option value="truefalse">True / False</option>
+                <option value="typeanswer">Type answer</option>
+                <option value="slider">Slider</option>
+                <option value="puzzle">Puzzle (order)</option>
+                <option value="pinanswer">Pin answer</option>
               </select>
             </div>
 
@@ -470,62 +651,144 @@ function QuestionCard({
             )}
           </div>
 
-          {/* Answers */}
+          {/* Answers section — varies by type */}
+          {q.type === "slider" && (
+            <div className="space-y-3 bg-gray-50 rounded-xl p-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Slider config</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="label text-xs">Min</label>
+                  <input type="number" title="Slider minimum value" className="input py-2 text-sm" value={(q.config as SliderConfig | null)?.min ?? 0}
+                    onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), min: Number(e.target.value) } })} />
+                </div>
+                <div>
+                  <label className="label text-xs">Max</label>
+                  <input type="number" title="Slider maximum value" className="input py-2 text-sm" value={(q.config as SliderConfig | null)?.max ?? 100}
+                    onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), max: Number(e.target.value) } })} />
+                </div>
+                <div>
+                  <label className="label text-xs">Step</label>
+                  <input type="number" title="Slider step value" className="input py-2 text-sm" min={0.01} value={(q.config as SliderConfig | null)?.step ?? 1}
+                    onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), step: Number(e.target.value) } })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="label text-xs">Correct answer</label>
+                  <input type="number" title="Slider correct value" className="input py-2 text-sm border-emerald-400 bg-emerald-50" value={(q.config as SliderConfig | null)?.correct ?? 50}
+                    onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), correct: Number(e.target.value) } })} />
+                </div>
+                <div>
+                  <label className="label text-xs">Tolerance (±)</label>
+                  <input type="number" title="Slider tolerance value" className="input py-2 text-sm" min={0} value={(q.config as SliderConfig | null)?.tolerance ?? 5}
+                    onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), tolerance: Number(e.target.value) } })} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {q.type === "pinanswer" && (
+            <div className="space-y-3 bg-gray-50 rounded-xl p-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pin answer — click image to set hotspot</p>
+              {q.image_url ? (
+                <div className="space-y-2">
+                  <div
+                    className="relative inline-block cursor-crosshair rounded-xl overflow-hidden border-2 border-dashed border-brand-300"
+                    role="button"
+                    aria-label="Click to set hotspot position"
+                    onClick={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      const x = (e.clientX - rect.left) / rect.width;
+                      const y = (e.clientY - rect.top) / rect.height;
+                      onUpdate({ config: { ...(q.config as PinAnswerConfig), hotspotX: x, hotspotY: y } });
+                    }}
+                  >
+                    <img src={q.image_url} alt="Question image" className="max-h-48 block" />
+                    {(q.config as PinAnswerConfig | null)?.hotspotX !== undefined && (
+                      <div
+                        className="absolute pointer-events-none rounded-full border-4 border-emerald-500 bg-emerald-500/20 -translate-x-1/2 -translate-y-1/2"
+                        style={{
+                          left: `${((q.config as PinAnswerConfig).hotspotX) * 100}%`,
+                          top: `${((q.config as PinAnswerConfig).hotspotY) * 100}%`,
+                          width: `${((q.config as PinAnswerConfig).hotspotRadius) * 200}%`,
+                          aspectRatio: "1",
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="label text-xs">Hotspot radius (fraction of image width: 0.02–0.4)</label>
+                    <input type="range" title="Pin answer hotspot radius" min={0.02} max={0.4} step={0.01}
+                      className="w-full accent-brand-500"
+                      value={(q.config as PinAnswerConfig | null)?.hotspotRadius ?? 0.1}
+                      onChange={(e) => onUpdate({ config: { ...(q.config as PinAnswerConfig), hotspotRadius: Number(e.target.value) } })} />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-amber-600">⚠️ Upload an image above, then click it to set the correct hotspot.</p>
+              )}
+            </div>
+          )}
+
+          {/* Classic answer options — hidden for slider, pinanswer */}
+          {q.type !== "slider" && q.type !== "pinanswer" && (
           <div className="space-y-2">
+            {q.type === "typeanswer" && (
+              <p className="text-xs text-gray-500">Acceptable answers — player’s text must match one (case-insensitive).</p>
+            )}
+            {q.type === "puzzle" && (
+              <p className="text-xs text-gray-500">Items in order shown here — players will see them shuffled.</p>
+            )}
             {q.answer_options.map((a, ai) => (
               <div key={a.id} className="flex items-center gap-2">
-                {/* Correct toggle */}
-                {q.type === "multiple" ? (
-                  <input
-                    type="checkbox"
-                    checked={a.is_correct}
-                    onChange={() => onSetCorrect(ai)}
-                    className="w-4 h-4 accent-emerald-500 shrink-0"
-                    aria-label={`Mark answer ${ai + 1} as correct`}
-                  />
-                ) : (
-                  <input
-                    type="radio"
-                    name={`correct-${q.id}`}
-                    checked={a.is_correct}
-                    onChange={() => onSetCorrect(ai)}
-                    disabled={q.type === "truefalse"}
-                    className="w-4 h-4 accent-emerald-500 shrink-0"
-                    aria-label={`Mark answer ${ai + 1} as correct`}
-                  />
+                {/* Correct toggle — hidden for puzzle/typeanswer (all are "correct") */}
+                {q.type !== "puzzle" && q.type !== "typeanswer" && (
+                  q.type === "multiple" ? (
+                    <input type="checkbox" checked={a.is_correct} onChange={() => onSetCorrect(ai)}
+                      className="w-4 h-4 accent-emerald-500 shrink-0" aria-label={`Mark answer ${ai + 1} as correct`} />
+                  ) : (
+                    <input type="radio" name={`correct-${q.id}`} checked={a.is_correct} onChange={() => onSetCorrect(ai)}
+                      disabled={q.type === "truefalse"}
+                      className="w-4 h-4 accent-emerald-500 shrink-0" aria-label={`Mark answer ${ai + 1} as correct`} />
+                  )
+                )}
+
+                {q.type === "puzzle" && (
+                  <span className="w-6 h-6 flex items-center justify-center text-sm font-bold text-gray-400 shrink-0">{ai + 1}</span>
                 )}
 
                 <input
                   type="text"
-                  className={`input py-2 flex-1 text-sm ${a.is_correct ? "border-emerald-400 bg-emerald-50" : ""}`}
-                  placeholder={`Answer ${ai + 1}`}
+                  className={`input py-2 flex-1 text-sm ${
+                    (q.type !== "puzzle" && q.type !== "typeanswer") && a.is_correct
+                      ? "border-emerald-400 bg-emerald-50"
+                      : q.type === "typeanswer" ? "border-emerald-400 bg-emerald-50" : ""
+                  }`}
+                  placeholder={q.type === "typeanswer" ? `Acceptable answer ${ai + 1}` : q.type === "puzzle" ? `Item ${ai + 1}` : `Answer ${ai + 1}`}
                   value={a.text}
                   onChange={(e) => onUpdateAnswer(ai, { text: e.target.value })}
                   readOnly={q.type === "truefalse"}
                   aria-label={`Answer option ${ai + 1}`}
                 />
 
-                {q.type !== "truefalse" && q.answer_options.length > 2 && (
-                  <button
-                    onClick={() => onRemoveAnswer(ai)}
+                {q.type !== "truefalse" && q.answer_options.length > (q.type === "typeanswer" ? 1 : 2) && (
+                  <button onClick={() => onRemoveAnswer(ai)}
                     className="p-1.5 text-gray-400 hover:text-danger-500"
-                    aria-label={`Remove answer ${ai + 1}`}
-                  >
+                    aria-label={`Remove answer ${ai + 1}`}>
                     <Trash2 size={14} />
                   </button>
                 )}
               </div>
             ))}
 
-            {q.type !== "truefalse" && q.answer_options.length < 6 && (
-              <button
-                onClick={onAddAnswer}
-                className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1"
-              >
-                <Plus size={14} /> Add option
+            {q.type !== "truefalse" && q.answer_options.length < (q.type === "typeanswer" ? 5 : 6) && (
+              <button onClick={onAddAnswer}
+                className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
+                <Plus size={14} /> {q.type === "typeanswer" ? "Add acceptable answer" : q.type === "puzzle" ? "Add item" : "Add option"}
               </button>
             )}
           </div>
+          )}
         </div>
       )}
     </Card>

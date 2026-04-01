@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { GameWebSocket, buildWsUrl } from "@/lib/websocket";
-export function useGameWebSocket({ roomCode, role, sessionId, token, displayName, playerId, onMessage, enabled = true, }) {
+export function useGameWebSocket({ roomCode, role, sessionId, token, displayName, playerId, avatarEmoji, onMessage, enabled = true, }) {
     const [status, setStatus] = useState("closed");
     const wsRef = useRef(null);
     const buildUrl = useCallback(() => buildWsUrl(roomCode, role, {
@@ -8,7 +8,8 @@ export function useGameWebSocket({ roomCode, role, sessionId, token, displayName
         token,
         displayName,
         playerId,
-    }), [roomCode, role, sessionId, token, displayName, playerId]);
+        avatarEmoji,
+    }), [roomCode, role, sessionId, token, displayName, playerId, avatarEmoji]);
     useEffect(() => {
         if (!enabled || !roomCode || !sessionId)
             return;

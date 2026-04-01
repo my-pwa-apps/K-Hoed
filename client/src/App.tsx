@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import Layout from "@/components/layout/Layout";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 
 // Pages
 import Landing from "@/pages/Landing";
@@ -18,13 +19,16 @@ import NotFound from "@/pages/NotFound";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
-  if (!token) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!token)
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(location.pathname)}`} replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
       <Routes>
         {/* Public */}
         <Route path="/" element={<Landing />} />
@@ -48,5 +52,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }

@@ -5,6 +5,7 @@ import type {
   QuestionPayload,
   LeaderboardEntry,
   ServerMessage,
+  RevealData,
 } from "@/lib/types";
 
 interface HostState {
@@ -18,6 +19,7 @@ interface HostState {
   timeLimit: number;
   distribution: Record<string, number>;
   correctAnswerIds: string[];
+  revealData: RevealData | null;
   leaderboard: LeaderboardEntry[];
   answerCount: number;
 }
@@ -26,6 +28,7 @@ interface PlayerState {
   role: "player";
   playerId: string;
   displayName: string;
+  avatarEmoji: string;
   phase: RoomPhase;
   currentQuestion: QuestionPayload | null;
   currentQuestionIndex: number;
@@ -60,6 +63,7 @@ const EMPTY_HOST: HostState = {
   timeLimit: 20,
   distribution: {},
   correctAnswerIds: [],
+  revealData: null,
   leaderboard: [],
   answerCount: 0,
 };
@@ -68,6 +72,7 @@ const EMPTY_PLAYER: PlayerState = {
   role: "player",
   playerId: "",
   displayName: "",
+  avatarEmoji: "😀",
   phase: "lobby",
   currentQuestion: null,
   currentQuestionIndex: -1,
@@ -162,7 +167,7 @@ function applyServerMessage(prev: GameState, msg: ServerMessage): Partial<GameSt
         timeLimit: msg.timeLimit,
       };
       if (prev.role === "host") {
-        return { ...base, distribution: {}, correctAnswerIds: [], answerCount: 0 };
+        return { ...base, distribution: {}, correctAnswerIds: [], revealData: null, answerCount: 0 };
       }
       return {
         ...base,
@@ -181,6 +186,7 @@ function applyServerMessage(prev: GameState, msg: ServerMessage): Partial<GameSt
         phase: "revealing" as RoomPhase,
         correctAnswerIds: msg.correctAnswerIds,
         distribution: msg.distribution,
+        revealData: msg.revealData ?? null,
       };
 
     case "answer_result":
@@ -202,6 +208,20 @@ function applyServerMessage(prev: GameState, msg: ServerMessage): Partial<GameSt
     case "game_ended":
       return { phase: "ended" as RoomPhase, leaderboard: msg.finalLeaderboard };
 
+    case "reaction": {
+      // Forward to the separate reactionStore — import lazily to avoid circular deps
+      import("./reactionStore").then(({ useReactionStore }) => {
+        useReactionStore.getState().addReaction({
+          playerId: msg.playerId,
+          displayName: msg.displayName,
+          avatarEmoji: msg.avatarEmoji ?? "😀",
+          gifUrl: msg.gifUrl,
+          caption: msg.caption,
+        });
+      });
+      return {};
+    }
+
     default:
       return {};
   }
@@ -222,6 +242,7 @@ export function initPlayerGame(
   roomCode: string,
   playerId: string,
   displayName: string,
+  avatarEmoji: string,
 ) {
   useGameStore.setState({
     ...EMPTY_PLAYER,
@@ -230,5 +251,6 @@ export function initPlayerGame(
     roomCode,
     playerId,
     displayName,
+    avatarEmoji,
   });
 }

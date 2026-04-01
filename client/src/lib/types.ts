@@ -1,8 +1,49 @@
 // ─── Domain types mirroring the worker ───────────────────────────────────────
 
-export type QuestionType = "classic" | "multiple" | "truefalse";
+export type QuestionType =
+  | "classic"
+  | "multiple"
+  | "truefalse"
+  | "typeanswer"
+  | "slider"
+  | "puzzle"
+  | "pinanswer";
 export type GameStatus = "lobby" | "active" | "ended";
 export type RoomPhase = "lobby" | "question" | "revealing" | "leaderboard" | "ended";
+
+export interface SliderConfig {
+  min: number;
+  max: number;
+  step: number;
+  correct: number;
+  tolerance: number;
+}
+
+export interface PinAnswerConfig {
+  hotspotX: number;
+  hotspotY: number;
+  hotspotRadius: number;
+}
+
+export type QuestionConfig = SliderConfig | PinAnswerConfig | null;
+
+export type BrainstormStatus = "proposed" | "shortlisted" | "added";
+
+export interface BrainstormItem {
+  id: string;
+  text: string;
+  notes: string | null;
+  suggested_by: string | null;
+  status: BrainstormStatus;
+}
+
+export interface RevealData {
+  type: QuestionType;
+  correctTexts?: string[];
+  sliderCorrect?: number;
+  sliderTolerance?: number;
+  pinHotspot?: { x: number; y: number; radius: number };
+}
 
 export interface User {
   id: string;
@@ -28,6 +69,7 @@ export interface Question {
   points: number;
   order_index: number;
   answer_options: AnswerOption[];
+  config?: QuestionConfig;
 }
 
 export interface Quiz {
@@ -36,6 +78,7 @@ export interface Quiz {
   description: string | null;
   owner_id: string;
   is_public: boolean;
+  brainstorm?: BrainstormItem[];
   created_at: number;
   updated_at: number;
   question_count?: number;
@@ -64,6 +107,7 @@ export interface SessionPlayer {
 export interface LeaderboardEntry {
   playerId: string;
   displayName: string;
+  avatarEmoji?: string;
   score: number;
   rank: number;
   delta: number;
@@ -72,6 +116,7 @@ export interface LeaderboardEntry {
 export interface PlayerSnapshot {
   id: string;
   displayName: string;
+  avatarEmoji?: string;
   score: number;
   connected: boolean;
 }
@@ -82,6 +127,8 @@ export interface QuestionPayload {
   imageUrl: string | null;
   type: QuestionType;
   answerOptions: { id: string; text: string }[];
+  /** Only present for slider questions – excludes correct value */
+  sliderConfig?: { min: number; max: number; step: number };
 }
 
 // ─── WebSocket message protocol (client side) ─────────────────────────────────
@@ -110,6 +157,7 @@ export type ServerMessage =
       type: "question_end";
       correctAnswerIds: string[];
       distribution: Record<string, number>;
+      revealData?: RevealData;
     }
   | {
       type: "answer_result";
@@ -121,7 +169,8 @@ export type ServerMessage =
   | { type: "game_ended"; finalLeaderboard: LeaderboardEntry[] }
   | { type: "error"; message: string; code?: string }
   | { type: "kicked"; reason?: string }
-  | { type: "ping" };
+  | { type: "ping" }
+  | { type: "reaction"; playerId: string; displayName: string; avatarEmoji?: string; gifUrl: string; caption?: string };
 
 export type ClientMessage =
   | { type: "host_join"; sessionId: string; authToken: string }
@@ -134,7 +183,10 @@ export type ClientMessage =
   | {
       type: "submit_answer";
       questionId: string;
-      answerIds: string[];
+      answerIds?: string[];
+      answerText?: string;
+      sliderValue?: number;
+      pinCoords?: { x: number; y: number };
       clientTimestamp: number;
     }
   | { type: "start_game" }
@@ -142,7 +194,8 @@ export type ClientMessage =
   | { type: "show_leaderboard" }
   | { type: "end_game" }
   | { type: "kick_player"; playerId: string }
-  | { type: "pong" };
+  | { type: "pong" }
+  | { type: "send_reaction"; gifUrl: string; caption?: string };
 
 // ─── API response wrapper ──────────────────────────────────────────────────────
 

@@ -105,6 +105,11 @@ export default function QuizList() {
               <p className="text-xs text-gray-400 mb-4">
                 {pluralise(quiz.question_count ?? 0, "question")}
               </p>
+              {!!quiz.brainstorm?.length && (
+                <p className="text-xs text-amber-700 mb-4 font-medium">
+                  {pluralise(quiz.brainstorm.length, "brainstorm idea")}
+                </p>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 <Button

@@ -22,14 +22,17 @@ export function useHostGame({ sessionId, roomCode, token }: UseHostGameOptions) 
     }
     store.applyMessage(msg);
   });
-  onMessage.current = (msg: ServerMessage) => {
-    if (msg.type === "game_ended") {
+  // Keep ref current so the callback always captures the latest navigate/sessionId
+  useEffect(() => {
+    onMessage.current = (msg: ServerMessage) => {
+      if (msg.type === "game_ended") {
+        store.applyMessage(msg);
+        setTimeout(() => navigate(`/results/${sessionId}`), 3000);
+        return;
+      }
       store.applyMessage(msg);
-      setTimeout(() => navigate(`/results/${sessionId}`), 3000);
-      return;
-    }
-    store.applyMessage(msg);
-  };
+    };
+  });
 
   const { status, send } = useGameWebSocket({
     roomCode,
@@ -52,20 +55,9 @@ interface UsePlayerGameOptions {
 export function usePlayerGame({ sessionId, roomCode, displayName, playerId }: UsePlayerGameOptions) {
   const store = useGameStore();
   const navigate = useNavigate();
+  const avatarEmoji = store.role === "player" ? store.avatarEmoji : "😀";
 
   const onMessage = useRef((msg: ServerMessage) => {
-    if (msg.type === "kicked" || msg.type === "error") {
-      if (msg.type === "kicked") navigate("/join?kicked=1");
-      return;
-    }
-    if (msg.type === "game_ended") {
-      store.applyMessage(msg);
-      // Player stays on leaderboard page
-      return;
-    }
-    store.applyMessage(msg);
-  });
-  onMessage.current = (msg: ServerMessage) => {
     if (msg.type === "kicked") {
       navigate("/join?kicked=1");
       return;
@@ -75,7 +67,20 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }: Us
       return;
     }
     store.applyMessage(msg);
-  };
+  });
+  useEffect(() => {
+    onMessage.current = (msg: ServerMessage) => {
+      if (msg.type === "kicked") {
+        navigate("/join?kicked=1");
+        return;
+      }
+      if (msg.type === "game_ended") {
+        store.applyMessage(msg);
+        return;
+      }
+      store.applyMessage(msg);
+    };
+  });
 
   const { status, send } = useGameWebSocket({
     roomCode,
@@ -83,6 +88,7 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }: Us
     sessionId,
     displayName,
     playerId,
+    avatarEmoji,
     onMessage: (msg) => onMessage.current(msg),
   });
 

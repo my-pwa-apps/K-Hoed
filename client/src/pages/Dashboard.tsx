@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { gameApi, quizApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
+import { useI18n, interp } from "@/i18n";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
+  const { t } = useI18n();
 
   const { data: quizzes } = useQuery({
     queryKey: ["quizzes"],
@@ -29,9 +31,9 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-display font-bold text-gray-900">
-            Welcome back, {user?.display_name?.split(" ")[0]} 👋
+            {interp(t.dashboard.welcome, { name: user?.display_name?.split(" ")[0] ?? "" })}
           </h1>
-          <p className="text-gray-500 mt-1">Ready to host your next quiz?</p>
+          <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>
         </div>
         <Link to="/quizzes/new">
           <Button size="lg">
@@ -43,11 +45,11 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid sm:grid-cols-3 gap-4">
-        <StatCard icon={<BookOpen />} label="Total quizzes" value={quizCount} />
-        <StatCard icon={<Play />} label="Games played" value={endedSessions} />
+        <StatCard icon={<BookOpen />} label={t.dashboard.total_quizzes} value={quizCount} />
+        <StatCard icon={<Play />} label={t.dashboard.games_played} value={endedSessions} />
         <StatCard
           icon={<BarChart3 />}
-          label="Questions created"
+          label={t.dashboard.questions_created}
           value={quizzes?.reduce((s, q) => s + (q.question_count ?? 0), 0) ?? 0}
         />
       </div>
@@ -55,26 +57,18 @@ export default function Dashboard() {
       {/* Quick actions */}
       <div className="grid sm:grid-cols-2 gap-4">
         <Card className="bg-gradient-to-br from-brand-500 to-brand-700 text-white border-0 shadow-lg">
-          <h2 className="font-display font-bold text-xl mb-2">Start a game</h2>
-          <p className="text-white/80 text-sm mb-4">
-            Pick a quiz, get a room code, and go live instantly.
-          </p>
+          <h2 className="font-display font-bold text-xl mb-2">{t.dashboard.start_game_title}</h2>
+          <p className="text-white/80 text-sm mb-4">{t.dashboard.start_game_body}</p>
           <Link to="/quizzes">
-            <Button variant="secondary" size="sm">
-              Choose quiz
-            </Button>
+            <Button variant="secondary" size="sm">{t.dashboard.choose_quiz}</Button>
           </Link>
         </Card>
 
         <Card className="bg-gradient-to-br from-accent-500 to-rose-500 text-white border-0 shadow-lg">
-          <h2 className="font-display font-bold text-xl mb-2">Create a quiz</h2>
-          <p className="text-white/80 text-sm mb-4">
-            Build your own questions with timers and answer choices.
-          </p>
+          <h2 className="font-display font-bold text-xl mb-2">{t.dashboard.create_quiz_title}</h2>
+          <p className="text-white/80 text-sm mb-4">{t.dashboard.create_quiz_body}</p>
           <Link to="/quizzes/new">
-            <Button variant="secondary" size="sm">
-              Start building
-            </Button>
+            <Button variant="secondary" size="sm">{t.dashboard.start_building}</Button>
           </Link>
         </Card>
       </div>
@@ -82,7 +76,7 @@ export default function Dashboard() {
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold text-gray-800 mb-3">Recent sessions</h2>
+          <h2 className="text-lg font-semibold text-gray-800 mb-3">{t.dashboard.recent_games}</h2>
           <div className="space-y-2">
             {recentSessions.map((session) => (
               <div

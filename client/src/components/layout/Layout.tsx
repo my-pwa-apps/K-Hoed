@@ -1,10 +1,13 @@
 import { Outlet, Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { LogOut, LayoutDashboard, BookOpen } from "lucide-react";
+import { LanguagePicker } from "@/components/ui/LanguagePicker";
+import { useI18n } from "@/i18n";
 
 export default function Layout() {
   const { user, clearAuth } = useAuthStore();
   const navigate = useNavigate();
+  const { t } = useI18n();
 
   const handleLogout = () => {
     clearAuth();
@@ -18,14 +21,14 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
           <Link to="/dashboard" className="flex items-center gap-2 font-display font-bold text-xl text-brand-600">
-            <span className="text-2xl" aria-hidden>🎯</span>
+            <img src="/logo.png" alt="K-Hoed" className="h-10 w-10 object-contain" />
             K-Hoed
           </Link>
 
           {/* Nav */}
           <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
             <NavLink to="/dashboard" icon={<LayoutDashboard size={16} />}>
-              Dashboard
+              {t.nav.dashboard}
             </NavLink>
             <NavLink to="/quizzes" icon={<BookOpen size={16} />}>
               Quizzes
@@ -33,7 +36,8 @@ export default function Layout() {
           </nav>
 
           {/* User menu */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <LanguagePicker />
             <span className="hidden sm:block text-sm text-gray-600 font-medium truncate max-w-[140px]">
               {user?.display_name}
             </span>

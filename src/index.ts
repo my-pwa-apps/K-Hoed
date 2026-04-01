@@ -51,7 +51,12 @@ app.get("/api/health", (c) =>
 // ─── Fallthrough — serve SPA ──────────────────────────────────────────────────
 
 app.get("*", async (c) => {
-  // All non-API routes served by the static asset binding (React SPA)
+  // Try the requested static asset first; fall back to the SPA entry point.
+  const assetResponse = await c.env.ASSETS.fetch(c.req.raw);
+  if (assetResponse.status !== 404) {
+    return assetResponse;
+  }
+
   return c.env.ASSETS.fetch(
     new Request(new URL("/index.html", c.req.url).toString()),
   );

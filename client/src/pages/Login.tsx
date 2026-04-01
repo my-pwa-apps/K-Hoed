@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/hooks/useAuth";
+import { useI18n } from "@/i18n";
 
 export default function Login() {
   const { login, loginPending } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -16,17 +19,18 @@ export default function Login() {
     setError(null);
     try {
       await login({ email, password });
-      navigate("/dashboard");
+      const returnTo = searchParams.get("returnTo");
+      navigate(returnTo && returnTo.startsWith("/") ? returnTo : "/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : t.auth.login_button);
     }
   };
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your host account">
+    <AuthShell title={t.auth.login_title} subtitle={t.auth.login_subtitle}>
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
         <Input
-          label="Email"
+          label={t.auth.email_label}
           type="email"
           required
           autoComplete="email"
@@ -36,7 +40,7 @@ export default function Login() {
         />
 
         <Input
-          label="Password"
+          label={t.auth.password_label}
           type="password"
           required
           autoComplete="current-password"
@@ -52,14 +56,14 @@ export default function Login() {
         )}
 
         <Button type="submit" fullWidth loading={loginPending} size="lg">
-          Sign in
+          {loginPending ? t.auth.logging_in : t.auth.login_button}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-600">
-        Don't have an account?{" "}
+        {t.auth.no_account}{" "}
         <Link to="/register" className="text-brand-600 font-semibold hover:underline">
-          Sign up free
+          {t.auth.register_link}
         </Link>
       </p>
     </AuthShell>
@@ -80,7 +84,7 @@ export function AuthShell({
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="font-display font-bold text-3xl text-white inline-flex items-center gap-2">
-            <span aria-hidden>🎯</span> K-Hoed
+            <img src="/logo.png" alt="" aria-hidden className="h-16 w-16 object-contain" /> K-Hoed
           </Link>
           <h1 className="mt-4 text-2xl font-bold text-white">{title}</h1>
           <p className="mt-1 text-white/65">{subtitle}</p>

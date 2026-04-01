@@ -49,12 +49,12 @@ export function Leaderboard({
             {/* Avatar */}
             <div
               className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0",
-                getAvatarColor(entry.playerId),
+                "w-9 h-9 rounded-full flex items-center justify-center text-xl shrink-0",
+                entry.avatarEmoji ? "" : getAvatarColor(entry.playerId),
               )}
               aria-hidden
             >
-              {entry.displayName[0]?.toUpperCase()}
+              {entry.avatarEmoji ?? entry.displayName[0]?.toUpperCase()}
             </div>
 
             {/* Name */}
@@ -134,11 +134,11 @@ export function Podium({ entries }: { entries: LeaderboardEntry[] }) {
           >
             <div
               className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center text-white font-bold",
-                getAvatarColor(entry.playerId),
+                "w-12 h-12 rounded-full flex items-center justify-center text-2xl",
+                entry.avatarEmoji ? "" : getAvatarColor(entry.playerId),
               )}
             >
-              {entry.displayName[0]?.toUpperCase()}
+              {entry.avatarEmoji ?? entry.displayName[0]?.toUpperCase()}
             </div>
             <span className="text-sm font-semibold text-gray-800 text-center max-w-[80px] truncate">
               {entry.displayName}

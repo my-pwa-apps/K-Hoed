@@ -13,14 +13,17 @@ export function useHostGame({ sessionId, roomCode, token }) {
         }
         store.applyMessage(msg);
     });
-    onMessage.current = (msg) => {
-        if (msg.type === "game_ended") {
+    // Keep ref current so the callback always captures the latest navigate/sessionId
+    useEffect(() => {
+        onMessage.current = (msg) => {
+            if (msg.type === "game_ended") {
+                store.applyMessage(msg);
+                setTimeout(() => navigate(`/results/${sessionId}`), 3000);
+                return;
+            }
             store.applyMessage(msg);
-            setTimeout(() => navigate(`/results/${sessionId}`), 3000);
-            return;
-        }
-        store.applyMessage(msg);
-    };
+        };
+    });
     const { status, send } = useGameWebSocket({
         roomCode,
         role: "host",
@@ -33,20 +36,8 @@ export function useHostGame({ sessionId, roomCode, token }) {
 export function usePlayerGame({ sessionId, roomCode, displayName, playerId }) {
     const store = useGameStore();
     const navigate = useNavigate();
+    const avatarEmoji = store.role === "player" ? store.avatarEmoji : "😀";
     const onMessage = useRef((msg) => {
-        if (msg.type === "kicked" || msg.type === "error") {
-            if (msg.type === "kicked")
-                navigate("/join?kicked=1");
-            return;
-        }
-        if (msg.type === "game_ended") {
-            store.applyMessage(msg);
-            // Player stays on leaderboard page
-            return;
-        }
-        store.applyMessage(msg);
-    });
-    onMessage.current = (msg) => {
         if (msg.type === "kicked") {
             navigate("/join?kicked=1");
             return;
@@ -56,13 +47,27 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }) {
             return;
         }
         store.applyMessage(msg);
-    };
+    });
+    useEffect(() => {
+        onMessage.current = (msg) => {
+            if (msg.type === "kicked") {
+                navigate("/join?kicked=1");
+                return;
+            }
+            if (msg.type === "game_ended") {
+                store.applyMessage(msg);
+                return;
+            }
+            store.applyMessage(msg);
+        };
+    });
     const { status, send } = useGameWebSocket({
         roomCode,
         role: "player",
         sessionId,
         displayName,
         playerId,
+        avatarEmoji,
         onMessage: (msg) => onMessage.current(msg),
     });
     // Persist playerId to sessionStorage for reconnection

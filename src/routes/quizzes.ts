@@ -28,21 +28,45 @@ const answerOptionSchema = z.object({
   order_index: z.number().int().min(0),
 });
 
+const sliderConfigSchema = z.object({
+  min: z.number(),
+  max: z.number(),
+  step: z.number().positive(),
+  correct: z.number(),
+  tolerance: z.number().min(0),
+});
+
+const pinAnswerConfigSchema = z.object({
+  hotspotX: z.number().min(0).max(1),
+  hotspotY: z.number().min(0).max(1),
+  hotspotRadius: z.number().min(0.01).max(0.5),
+});
+
+const brainstormItemSchema = z.object({
+  id: z.string().min(1).max(100),
+  text: z.string().min(1).max(500).trim(),
+  notes: z.string().max(1000).trim().nullable().optional(),
+  suggested_by: z.string().max(120).trim().nullable().optional(),
+  status: z.enum(["proposed", "shortlisted", "added"]).default("proposed"),
+});
+
 const questionSchema = z.object({
   id: z.string().uuid().optional(),
   text: z.string().min(1).max(1000).trim(),
   image_url: z.string().url().max(512).nullable().optional(),
-  type: z.enum(["classic", "multiple", "truefalse"]),
+  type: z.enum(["classic", "multiple", "truefalse", "typeanswer", "slider", "puzzle", "pinanswer"]),
   time_limit: z.number().int().min(5).max(120).default(20),
   points: z.number().int().min(100).max(10000).default(1000),
   order_index: z.number().int().min(0),
-  answer_options: z.array(answerOptionSchema).min(2).max(6),
+  answer_options: z.array(answerOptionSchema).max(8).default([]),
+  config: z.union([sliderConfigSchema, pinAnswerConfigSchema]).nullable().optional(),
 });
 
 const quizCreateSchema = z.object({
   title: z.string().min(1).max(200).trim(),
   description: z.string().max(1000).trim().nullable().optional(),
   is_public: z.boolean().default(false),
+  brainstorm: z.array(brainstormItemSchema).max(200).optional().default([]),
   questions: z.array(questionSchema).max(100).optional().default([]),
 });
 
@@ -64,7 +88,14 @@ function zodHook<T>(
 app.get("/", async (c) => {
   const user = c.get("user");
   const quizzes = await getQuizzesByOwner(c.env.DB, user.sub);
-  return c.json({ success: true, data: quizzes });
+  return c.json({
+    success: true,
+    data: quizzes.map((quiz) => ({
+      ...quiz,
+      is_public: quiz.is_public === 1,
+      brainstorm: quiz.brainstorm ? JSON.parse(quiz.brainstorm) : [],
+    })),
+  });
 });
 
 // ─── POST /quizzes ────────────────────────────────────────────────────────────
@@ -86,6 +117,7 @@ app.post("/", zValidator("json", quizCreateSchema, zodHook), async (c) => {
     description: body.description ?? null,
     owner_id: user.sub,
     is_public: body.is_public ? 1 : 0,
+    brainstorm: body.brainstorm.length > 0 ? JSON.stringify(body.brainstorm) : null,
   });
 
   if (body.questions && body.questions.length > 0) {
@@ -129,6 +161,9 @@ app.put("/:id", zValidator("json", quizUpdateSchema, zodHook), async (c) => {
   if (body.title !== undefined) updateData.title = body.title;
   if (body.description !== undefined) updateData.description = body.description;
   if (body.is_public !== undefined) updateData.is_public = body.is_public ? 1 : 0;
+  if (body.brainstorm !== undefined) {
+    updateData.brainstorm = body.brainstorm.length > 0 ? JSON.stringify(body.brainstorm) : null;
+  }
   await updateQuiz(c.env.DB, quizId, updateData);
 
   if (body.questions !== undefined) {
@@ -169,6 +204,7 @@ app.post("/:id/duplicate", async (c) => {
     description: source.description,
     owner_id: user.sub,
     is_public: 0,
+    brainstorm: source.brainstorm.length > 0 ? JSON.stringify(source.brainstorm) : null,
   });
 
   if (source.questions.length > 0) {
@@ -180,6 +216,7 @@ app.post("/:id/duplicate", async (c) => {
       time_limit: q.time_limit,
       points: q.points,
       order_index: q.order_index,
+      config: q.config ? JSON.stringify(q.config) : null,
     }));
     const answerOptions = source.questions.flatMap((q, qi) =>
       q.answer_options.map((a) => ({
@@ -223,6 +260,7 @@ app.post("/import", zValidator("json", quizCreateSchema, zodHook), async (c) => 
     description: body.description ?? null,
     owner_id: user.sub,
     is_public: body.is_public ? 1 : 0,
+    brainstorm: body.brainstorm.length > 0 ? JSON.stringify(body.brainstorm) : null,
   });
 
   if (body.questions && body.questions.length > 0) {
@@ -255,6 +293,29 @@ function validateQuestions(questions: QuestionInput[]): string | null {
     if (q.type === "truefalse" && q.answer_options.length !== 2) {
       return `Question "${q.text}" of type "truefalse" must have exactly 2 options`;
     }
+    if (q.type === "typeanswer") {
+      if (q.answer_options.length < 1 || correctCount < 1) {
+        return `Question "${q.text}" of type "typeanswer" must have at least 1 correct answer`;
+      }
+    }
+    if (q.type === "puzzle") {
+      if (q.answer_options.length < 2) {
+        return `Question "${q.text}" of type "puzzle" must have at least 2 items`;
+      }
+    }
+    if (q.type === "slider") {
+      if (!q.config) {
+        return `Question "${q.text}" of type "slider" requires a config (min, max, step, correct, tolerance)`;
+      }
+    }
+    if (q.type === "pinanswer") {
+      if (!q.image_url) {
+        return `Question "${q.text}" of type "pinanswer" requires an uploaded image`;
+      }
+      if (!q.config) {
+        return `Question "${q.text}" of type "pinanswer" requires a hotspot config`;
+      }
+    }
   }
   return null;
 }
@@ -268,6 +329,7 @@ function normaliseQuestions(quizId: string, questions: QuestionInput[]) {
     time_limit: q.time_limit,
     points: q.points,
     order_index: q.order_index,
+    config: q.config ? JSON.stringify(q.config) : null,
   }));
 
   const answerOptions = questions.flatMap((q, qi) =>

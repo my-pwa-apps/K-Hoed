@@ -145,5 +145,7 @@ export function buildWsUrl(roomCode, role, params) {
         url.searchParams.set("displayName", params.displayName);
     if (params.playerId)
         url.searchParams.set("playerId", params.playerId);
+    if (params.avatarEmoji)
+        url.searchParams.set("avatarEmoji", encodeURIComponent(params.avatarEmoji));
     return url.toString();
 }

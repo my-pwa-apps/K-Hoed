@@ -1,112 +1,201 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, AlertCircle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { LanguagePicker } from "@/components/ui/LanguagePicker";
+import { AvatarPicker } from "@/components/game/AvatarPicker";
 import { gameApi } from "@/lib/api";
 import { initPlayerGame } from "@/stores/gameStore";
+import { useI18n } from "@/i18n";
+import { AVATARS, type AvatarEmoji } from "@/lib/utils";
+
+type Step = "info" | "avatar";
 
 export default function PlayerJoin() {
   const { code: codeFromUrl } = useParams<{ code?: string }>();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const kicked = new URLSearchParams(location.search).has("kicked");
 
+  const [step, setStep] = useState<Step>("info");
   const [code, setCode] = useState(codeFromUrl?.toUpperCase() ?? "");
   const [displayName, setDisplayName] = useState("");
+  const [avatar, setAvatar] = useState<AvatarEmoji | "">(
+    AVATARS[Math.floor(Math.random() * AVATARS.length)]!,
+  );
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(kicked ? "You were removed from the game." : null);
+  const [error, setError] = useState<string | null>(kicked ? t.join.kicked : null);
 
-  const handleJoin = async (e: React.FormEvent) => {
+  const goToAvatar = (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim() || !displayName.trim()) return;
+    setStep("avatar");
+  };
+
+  const handleJoin = async () => {
+    if (!avatar) return;
+    const trimCode = code.trim().toUpperCase();
+    const trimName = displayName.trim();
     setError(null);
     setLoading(true);
 
     try {
-      const session = await gameApi.lookupByCode(code.trim().toUpperCase());
+      const session = await gameApi.lookupByCode(trimCode);
 
-      // Generate a persistent playerId stored in sessionStorage
       const storageKey = `player-${session.room_code}`;
       let playerId: string;
       try {
-        const stored = JSON.parse(sessionStorage.getItem(storageKey) ?? "{}") as {
-          playerId?: string;
-          displayName?: string;
-        };
+        const raw = sessionStorage.getItem(storageKey);
+        const stored = raw ? (JSON.parse(raw) as { playerId?: string }) : {};
         playerId = stored.playerId ?? crypto.randomUUID();
       } catch {
         playerId = crypto.randomUUID();
       }
 
-      initPlayerGame(session.session_id, session.room_code, playerId, displayName.trim());
+      initPlayerGame(session.session_id, session.room_code, playerId, trimName, avatar);
       sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ playerId, displayName: displayName.trim() }),
+        JSON.stringify({ playerId, displayName: trimName, avatarEmoji: avatar }),
       );
 
-      navigate("/play", { state: { sessionId: session.session_id, roomCode: session.room_code } });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Room not found");
+      navigate("/play", {
+        state: { sessionId: session.session_id, roomCode: session.room_code },
+      });
+    } catch {
+      setError(t.join.room_not_found);
+      setStep("info");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-950 to-accent-600 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-950 to-accent-600 flex flex-col items-center justify-center p-4">
+      {/* Language picker top-right */}
+      <div className="absolute top-4 right-4">
+        <LanguagePicker light />
+      </div>
+
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <span className="text-6xl" aria-hidden>🎯</span>
-          <h1 className="mt-4 font-display font-extrabold text-4xl text-white">K-Hoed</h1>
-          <p className="text-white/70 mt-2">Enter a room code to join</p>
+          <img src="/logo.png" alt="K-Hoed" className="h-28 w-28 mx-auto object-contain" />
+          <h1 className="mt-2 font-display font-extrabold text-4xl text-white">K-Hoed</h1>
+          <p className="text-white/70 mt-2">{t.join.subtitle}</p>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-2xl p-8 space-y-4">
-          {error && (
-            <div className="flex items-start gap-2 text-sm text-danger-600 bg-danger-50 rounded-xl p-3">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              {error}
-            </div>
+        <AnimatePresence mode="wait">
+
+          {/* ── Step 1: Name + Room code ── */}
+          {step === "info" && (
+            <motion.div
+              key="info"
+              initial={{ opacity: 0, x: -30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -30 }}
+              className="bg-white rounded-3xl shadow-2xl p-8 space-y-4"
+            >
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 text-sm text-danger-600 bg-danger-50 rounded-xl p-3"
+                >
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={goToAvatar} className="space-y-4">
+                <div>
+                  <label className="label" htmlFor="room-code">
+                    {t.join.room_code_label}
+                  </label>
+                  <input
+                    id="room-code"
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
+                    autoCapitalize="characters"
+                    className="input text-2xl font-mono font-bold tracking-widest uppercase text-center"
+                    placeholder="ABCD12"
+                    maxLength={6}
+                    required
+                    value={code}
+                    onChange={(e) =>
+                      setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))
+                    }
+                    aria-describedby="room-code-hint"
+                  />
+                  <p id="room-code-hint" className="mt-1 text-xs text-gray-400 text-center">
+                    {t.join.room_code_hint}
+                  </p>
+                </div>
+
+                <Input
+                  label={t.join.nickname_label}
+                  type="text"
+                  required
+                  placeholder={t.join.nickname_placeholder}
+                  maxLength={30}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
+
+                <Button type="submit" fullWidth size="lg">
+                  {t.join.next ?? "Next"}
+                  <ArrowRight size={18} aria-hidden />
+                </Button>
+              </form>
+            </motion.div>
           )}
 
-          <form onSubmit={handleJoin} className="space-y-4">
-            <div>
-              <label className="label" htmlFor="room-code">
-                Room code
-              </label>
-              <input
-                id="room-code"
-                type="text"
-                className="input text-2xl font-mono font-bold tracking-widest uppercase text-center"
-                placeholder="ABCD12"
-                maxLength={6}
-                required
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                aria-describedby="room-code-hint"
+          {/* ── Step 2: Avatar picker ── */}
+          {step === "avatar" && (
+            <motion.div
+              key="avatar"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 30 }}
+              className="bg-white rounded-3xl shadow-2xl p-8 space-y-5"
+            >
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setStep("info")}
+                  className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  aria-label="Back"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <div>
+                  <p className="font-display font-bold text-lg text-gray-900">
+                    {t.chat.pick_avatar}
+                  </p>
+                  <p className="text-sm text-gray-500">{displayName}</p>
+                </div>
+                <span className="ml-auto text-4xl">{avatar}</span>
+              </div>
+
+              <AvatarPicker
+                selected={avatar}
+                onSelect={(a) => setAvatar(a)}
               />
-              <p id="room-code-hint" className="mt-1 text-xs text-gray-400 text-center">
-                Get the code from your host
-              </p>
-            </div>
 
-            <Input
-              label="Your nickname"
-              type="text"
-              required
-              placeholder="e.g. QuizWizard"
-              maxLength={30}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-
-            <Button type="submit" fullWidth size="lg" loading={loading}>
-              Join game
-              <ArrowRight size={18} />
-            </Button>
-          </form>
-        </div>
+              <Button
+                fullWidth
+                size="lg"
+                onClick={handleJoin}
+                loading={loading}
+                disabled={!avatar}
+              >
+                {t.join.join_button}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 }
+

@@ -44,13 +44,14 @@ export function calculateScore(
  * Returns entries with 1-based rank and delta (points won on this question).
  */
 export function buildLeaderboard(
-  players: Array<{ id: string; displayName: string; score: number }>,
+  players: Array<{ id: string; displayName: string; avatarEmoji: string; score: number }>,
   prevScores: Map<string, number>,
 ): import("../types/index.js").LeaderboardEntry[] {
   const sorted = [...players].sort((a, b) => b.score - a.score);
   return sorted.map((p, i) => ({
     playerId: p.id,
     displayName: p.displayName,
+    avatarEmoji: p.avatarEmoji,
     score: p.score,
     rank: i + 1,
     delta: p.score - (prevScores.get(p.id) ?? 0),
@@ -86,4 +87,46 @@ export function evaluateAnswer(
   }
 
   return false;
+}
+
+/**
+ * Evaluate a free-text answer against a set of acceptable correct texts.
+ * Comparison is case-insensitive and trims surrounding whitespace.
+ */
+export function evaluateTypeanswer(submitted: string, correctTexts: string[]): boolean {
+  const normalized = submitted.trim().toLowerCase();
+  if (!normalized) return false;
+  return correctTexts.some((t) => t.trim().toLowerCase() === normalized);
+}
+
+/**
+ * Evaluate a slider value against the configured correct value + tolerance.
+ */
+export function evaluateSlider(
+  value: number,
+  config: import("../types/index.js").SliderConfig,
+): boolean {
+  return Math.abs(value - config.correct) <= config.tolerance;
+}
+
+/**
+ * Evaluate a puzzle submission: the submitted ID order must exactly match
+ * the correct order (determined by order_index on the server).
+ */
+export function evaluatePuzzle(submittedOrder: string[], correctOrder: string[]): boolean {
+  if (submittedOrder.length !== correctOrder.length) return false;
+  return submittedOrder.every((id, i) => id === correctOrder[i]);
+}
+
+/**
+ * Evaluate a pin answer: the clicked point must be within the hotspot circle.
+ * All coordinates are 0-1 normalised fractions of image dimensions.
+ */
+export function evaluatePinanswer(
+  coords: { x: number; y: number },
+  config: import("../types/index.js").PinAnswerConfig,
+): boolean {
+  const dx = coords.x - config.hotspotX;
+  const dy = coords.y - config.hotspotY;
+  return Math.sqrt(dx * dx + dy * dy) <= config.hotspotRadius;
 }

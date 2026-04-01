@@ -9,6 +9,7 @@ import type {
   SubmissionRow,
   QuestionWithAnswers,
   QuizWithQuestions,
+  BrainstormItem,
 } from "../types/index.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -19,6 +20,15 @@ function row<T>(result: D1Result<T>): T | null {
 
 function rows<T>(result: D1Result<T>): T[] {
   return result.results;
+}
+
+function parseBrainstorm(raw: string | null): BrainstormItem[] {
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as BrainstormItem[];
+  } catch {
+    return [];
+  }
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
@@ -109,6 +119,7 @@ export async function getQuizWithQuestions(
     return {
       ...quiz,
       is_public: quiz.is_public === 1,
+      brainstorm: parseBrainstorm(quiz.brainstorm),
       questions: [],
     } as unknown as QuizWithQuestions;
   }
@@ -131,6 +142,7 @@ export async function getQuizWithQuestions(
 
   const questions: QuestionWithAnswers[] = questionRows.map((q) => ({
     ...q,
+    config: q.config ? (JSON.parse(q.config) as import("../types/index.js").QuestionConfig) : null,
     answer_options: (answersByQuestion.get(q.id) ?? []).map((a) => ({
       id: a.id,
       text: a.text,
@@ -142,28 +154,29 @@ export async function getQuizWithQuestions(
   return {
     ...quiz,
     is_public: quiz.is_public === 1,
+    brainstorm: parseBrainstorm(quiz.brainstorm),
     questions,
   } as unknown as QuizWithQuestions;
 }
 
 export async function createQuiz(
   db: D1Database,
-  quiz: Pick<QuizRow, "id" | "title" | "description" | "owner_id" | "is_public">,
+  quiz: Pick<QuizRow, "id" | "title" | "description" | "owner_id" | "is_public" | "brainstorm">,
 ): Promise<void> {
   const now = Date.now();
   await db
     .prepare(
-      `INSERT INTO quizzes (id, title, description, owner_id, is_public, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+      `INSERT INTO quizzes (id, title, description, owner_id, is_public, brainstorm, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
     )
-    .bind(quiz.id, quiz.title, quiz.description, quiz.owner_id, quiz.is_public ? 1 : 0, now, now)
+    .bind(quiz.id, quiz.title, quiz.description, quiz.owner_id, quiz.is_public ? 1 : 0, quiz.brainstorm, now, now)
     .run();
 }
 
 export async function updateQuiz(
   db: D1Database,
   id: string,
-  data: Partial<Pick<QuizRow, "title" | "description" | "is_public">>,
+  data: Partial<Pick<QuizRow, "title" | "description" | "is_public" | "brainstorm">>,
 ): Promise<void> {
   const now = Date.now();
   const sets: string[] = ["updated_at = ?1"];
@@ -181,6 +194,10 @@ export async function updateQuiz(
   if (data.is_public !== undefined) {
     sets.push(`is_public = ?${idx++}`);
     binds.push(data.is_public ? 1 : 0);
+  }
+  if (data.brainstorm !== undefined) {
+    sets.push(`brainstorm = ?${idx++}`);
+    binds.push(data.brainstorm);
   }
 
   binds.push(id);
@@ -212,10 +229,10 @@ export async function replaceQuizQuestions(
     stmts.push(
       db
         .prepare(
-          `INSERT INTO questions (id, quiz_id, text, image_url, type, time_limit, points, order_index, created_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+          `INSERT INTO questions (id, quiz_id, text, image_url, type, time_limit, points, order_index, config, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
         )
-        .bind(q.id, quizId, q.text, q.image_url, q.type, q.time_limit, q.points, q.order_index, now),
+        .bind(q.id, quizId, q.text, q.image_url, q.type, q.time_limit, q.points, q.order_index, q.config ?? null, now),
     );
   }
 

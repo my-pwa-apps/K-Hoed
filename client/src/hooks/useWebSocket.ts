@@ -9,6 +9,7 @@ interface UseWebSocketOptions {
   token?: string;
   displayName?: string;
   playerId?: string;
+  avatarEmoji?: string;
   onMessage: (msg: import("@/lib/types").ServerMessage) => void;
   enabled?: boolean;
 }
@@ -20,6 +21,7 @@ export function useGameWebSocket({
   token,
   displayName,
   playerId,
+  avatarEmoji,
   onMessage,
   enabled = true,
 }: UseWebSocketOptions) {
@@ -33,8 +35,9 @@ export function useGameWebSocket({
         token,
         displayName,
         playerId,
+        avatarEmoji,
       }),
-    [roomCode, role, sessionId, token, displayName, playerId],
+    [roomCode, role, sessionId, token, displayName, playerId, avatarEmoji],
   );
 
   useEffect(() => {

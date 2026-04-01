@@ -10,6 +10,7 @@ const EMPTY_HOST = {
     timeLimit: 20,
     distribution: {},
     correctAnswerIds: [],
+    revealData: null,
     leaderboard: [],
     answerCount: 0,
 };
@@ -17,6 +18,7 @@ const EMPTY_PLAYER = {
     role: "player",
     playerId: "",
     displayName: "",
+    avatarEmoji: "😀",
     phase: "lobby",
     currentQuestion: null,
     currentQuestionIndex: -1,
@@ -102,7 +104,7 @@ function applyServerMessage(prev, msg) {
                 timeLimit: msg.timeLimit,
             };
             if (prev.role === "host") {
-                return { ...base, distribution: {}, correctAnswerIds: [], answerCount: 0 };
+                return { ...base, distribution: {}, correctAnswerIds: [], revealData: null, answerCount: 0 };
             }
             return {
                 ...base,
@@ -120,6 +122,7 @@ function applyServerMessage(prev, msg) {
                 phase: "revealing",
                 correctAnswerIds: msg.correctAnswerIds,
                 distribution: msg.distribution,
+                revealData: msg.revealData ?? null,
             };
         case "answer_result":
             if (prev.role !== "player")
@@ -138,6 +141,19 @@ function applyServerMessage(prev, msg) {
             return { phase: "leaderboard", leaderboard: msg.entries };
         case "game_ended":
             return { phase: "ended", leaderboard: msg.finalLeaderboard };
+        case "reaction": {
+            // Forward to the separate reactionStore — import lazily to avoid circular deps
+            import("./reactionStore").then(({ useReactionStore }) => {
+                useReactionStore.getState().addReaction({
+                    playerId: msg.playerId,
+                    displayName: msg.displayName,
+                    avatarEmoji: msg.avatarEmoji ?? "😀",
+                    gifUrl: msg.gifUrl,
+                    caption: msg.caption,
+                });
+            });
+            return {};
+        }
         default:
             return {};
     }
@@ -151,7 +167,7 @@ export function initHostGame(sessionId, roomCode) {
     });
 }
 /** Initialise game store for a player session */
-export function initPlayerGame(sessionId, roomCode, playerId, displayName) {
+export function initPlayerGame(sessionId, roomCode, playerId, displayName, avatarEmoji) {
     useGameStore.setState({
         ...EMPTY_PLAYER,
         role: "player",
@@ -159,5 +175,6 @@ export function initPlayerGame(sessionId, roomCode, playerId, displayName) {
         roomCode,
         playerId,
         displayName,
+        avatarEmoji,
     });
 }

@@ -1,8 +1,57 @@
 // ─── Domain enumerations ─────────────────────────────────────────────────────
 
-export type QuestionType = "classic" | "multiple" | "truefalse";
+export type QuestionType =
+  | "classic"
+  | "multiple"
+  | "truefalse"
+  | "typeanswer"
+  | "slider"
+  | "puzzle"
+  | "pinanswer";
 export type GameStatus = "lobby" | "active" | "ended";
 export type RoomPhase = "lobby" | "question" | "revealing" | "leaderboard" | "ended";
+
+// ─── Question config (stored as JSON in questions.config) ────────────────────
+
+export interface SliderConfig {
+  min: number;
+  max: number;
+  step: number;
+  correct: number;
+  tolerance: number;
+}
+
+export interface PinAnswerConfig {
+  /** 0-1 normalised position on the image */
+  hotspotX: number;
+  hotspotY: number;
+  /** Radius as a fraction of image width (0-1) */
+  hotspotRadius: number;
+}
+
+export type QuestionConfig = SliderConfig | PinAnswerConfig | null;
+
+export type BrainstormStatus = "proposed" | "shortlisted" | "added";
+
+export interface BrainstormItem {
+  id: string;
+  text: string;
+  notes: string | null;
+  suggested_by: string | null;
+  status: BrainstormStatus;
+}
+
+/** Data broadcast to all clients when a question ends, to show correct answer UI */
+export interface RevealData {
+  type: QuestionType;
+  /** typeanswer: accepted answers; puzzle: correct order labels */
+  correctTexts?: string[];
+  /** slider */
+  sliderCorrect?: number;
+  sliderTolerance?: number;
+  /** pinanswer */
+  pinHotspot?: { x: number; y: number; radius: number };
+}
 
 // ─── Database row shapes ──────────────────────────────────────────────────────
 
@@ -21,6 +70,7 @@ export interface QuizRow {
   description: string | null;
   owner_id: string;
   is_public: number; // 0 | 1 (SQLite bool)
+  brainstorm: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -34,6 +84,8 @@ export interface QuestionRow {
   time_limit: number;
   points: number;
   order_index: number;
+  /** JSON-serialised QuestionConfig, or null */
+  config: string | null;
   created_at: number;
 }
 
@@ -103,6 +155,8 @@ export interface QuestionWithAnswers {
   time_limit: number;
   points: number;
   order_index: number;
+  /** Parsed question config (null for classic/multiple/truefalse/typeanswer/puzzle) */
+  config: QuestionConfig;
   answer_options: AnswerOption[];
 }
 
@@ -112,6 +166,7 @@ export interface QuizWithQuestions {
   description: string | null;
   owner_id: string;
   is_public: boolean;
+  brainstorm: BrainstormItem[];
   created_at: number;
   updated_at: number;
   questions: QuestionWithAnswers[];
@@ -122,6 +177,7 @@ export interface QuizWithQuestions {
 export interface PlayerInMemory {
   id: string;
   displayName: string;
+  avatarEmoji: string;
   score: number;
   connected: boolean;
   /** Whether this player is the reconnecting placeholder waiting for WS */
@@ -130,7 +186,12 @@ export interface PlayerInMemory {
 
 export interface SubmissionInMemory {
   playerId: string;
+  /** Used for classic/multiple/truefalse/puzzle */
   answerIds: string[];
+  /** Used for typeanswer */
+  answerText?: string;
+  /** Used for slider */
+  sliderValue?: number;
   responseTimeMs: number;
   isCorrect: boolean;
   pointsEarned: number;
@@ -139,6 +200,7 @@ export interface SubmissionInMemory {
 export interface LeaderboardEntry {
   playerId: string;
   displayName: string;
+  avatarEmoji: string;
   score: number;
   rank: number;
   delta: number; // points gained on last question
@@ -159,8 +221,14 @@ export type ClientMessage =
   | {
       type: "submit_answer";
       questionId: string;
-      answerIds: string[];
-      /** Client-side timestamp for anti-cheat cross-check */
+      /** classic / multiple / truefalse / puzzle (ordered ids) */
+      answerIds?: string[];
+      /** typeanswer */
+      answerText?: string;
+      /** slider */
+      sliderValue?: number;
+      /** pinanswer – normalised 0-1 coordinates */
+      pinCoords?: { x: number; y: number };
       clientTimestamp: number;
     }
   | { type: "start_game" }
@@ -168,7 +236,8 @@ export type ClientMessage =
   | { type: "show_leaderboard" }
   | { type: "end_game" }
   | { type: "kick_player"; playerId: string }
-  | { type: "pong" };
+  | { type: "pong" }
+  | { type: "send_reaction"; gifUrl: string; caption?: string };
 
 // Server → Client
 export type ServerMessage =
@@ -195,6 +264,8 @@ export type ServerMessage =
       type: "question_end";
       correctAnswerIds: string[];
       distribution: Record<string, number>;
+      /** Extra reveal data for non-choice question types */
+      revealData?: RevealData;
     }
   | {
       type: "answer_result";
@@ -206,22 +277,27 @@ export type ServerMessage =
   | { type: "game_ended"; finalLeaderboard: LeaderboardEntry[] }
   | { type: "error"; message: string; code?: string }
   | { type: "kicked"; reason?: string }
-  | { type: "ping" };
+  | { type: "ping" }
+  | { type: "reaction"; playerId: string; displayName: string; avatarEmoji: string; gifUrl: string; caption?: string };
 
 export interface PlayerSnapshot {
   id: string;
   displayName: string;
+  avatarEmoji: string;
   score: number;
   connected: boolean;
 }
 
-/** Question payload sent to players (no is_correct field) */
+/** Question payload sent to players (no is_correct field, no correct values) */
 export interface QuestionPayload {
   id: string;
   text: string;
   imageUrl: string | null;
   type: QuestionType;
+  /** For classic/multiple/truefalse/puzzle (shuffled for puzzle) */
   answerOptions: { id: string; text: string }[];
+  /** Only for slider – excludes the correct value */
+  sliderConfig?: { min: number; max: number; step: number };
 }
 
 // ─── API response shapes ──────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import type { DurableObject } from "@cloudflare/workers-types";
 import { verifyJwt } from "../lib/auth.js";
-import { calculateScore, evaluateAnswer, buildLeaderboard } from "../lib/scoring.js";
+import { calculateScore, evaluateAnswer, evaluateTypeanswer, evaluateSlider, evaluatePuzzle, evaluatePinanswer, buildLeaderboard } from "../lib/scoring.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { newId } from "../lib/room-code.js";
 import {
@@ -20,6 +20,9 @@ import type {
   SubmissionInMemory,
   QuestionWithAnswers,
   RoomPhase,
+  SliderConfig,
+  PinAnswerConfig,
+  RevealData,
 } from "../types/index.js";
 import { SCORING } from "../lib/scoring.js";
 
@@ -83,6 +86,7 @@ export class GameRoom implements DurableObject {
     const authToken = url.searchParams.get("token") ?? "";
     const displayName = (url.searchParams.get("displayName") ?? "").trim();
     const playerId = url.searchParams.get("playerId") ?? "";
+    const avatarEmoji = decodeURIComponent(url.searchParams.get("avatarEmoji") ?? "😀");
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
@@ -94,7 +98,7 @@ export class GameRoom implements DurableObject {
         return new Response(null, { status: 101, webSocket: client });
       }
     } else if (role === "player") {
-      const ok = await this.acceptPlayer(server, sessionId, displayName, playerId);
+      const ok = await this.acceptPlayer(server, sessionId, displayName, playerId, avatarEmoji);
       if (!ok) {
         server.close(4002, "Cannot join");
         return new Response(null, { status: 101, webSocket: client });
@@ -106,12 +110,17 @@ export class GameRoom implements DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  // ─── Alarm (question timer expiry) ────────────────────────────────────────
+  // ─── Alarm (question timer expiry OR end-game close) ───────────────────────
 
   async alarm(): Promise<void> {
     await this.ensureInitialised();
     if (this.phase === "question") {
       await this.endCurrentQuestion();
+    } else if (this.phase === "ended") {
+      // Close all connections gracefully after game_ended has been delivered
+      for (const ws of this.state.getWebSockets()) {
+        try { ws.close(1000, "Game over"); } catch { /* already closed */ }
+      }
     }
   }
 
@@ -210,11 +219,10 @@ export class GameRoom implements DurableObject {
         displayName: p.displayName,
         score: p.score,
         connected: p.connected,
+        avatarEmoji: p.avatarEmoji,
       })),
     });
 
-    // Heartbeat ping every 20 s
-    this.schedulePing(ws);
     return true;
   }
 
@@ -223,6 +231,7 @@ export class GameRoom implements DurableObject {
     sessionId: string,
     displayName: string,
     existingPlayerId: string,
+    avatarEmoji: string,
   ): Promise<boolean> {
     if (!displayName || displayName.length < 1 || displayName.length > 30) return false;
 
@@ -259,6 +268,7 @@ export class GameRoom implements DurableObject {
       this.players.set(playerId, {
         id: playerId,
         displayName: safeName,
+        avatarEmoji: avatarEmoji || "😀",
         score: 0,
         connected: true,
         disconnectedAt: null,
@@ -270,7 +280,7 @@ export class GameRoom implements DurableObject {
         display_name: safeName,
       });
 
-      this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, score: 0, connected: true } });
+      this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, avatarEmoji: avatarEmoji || "😀", score: 0, connected: true } });
     }
 
     this.state.acceptWebSocket(ws, ["player", `player:${playerId}`]);
@@ -296,7 +306,6 @@ export class GameRoom implements DurableObject {
     }
 
     await this.persistPlayers();
-    this.schedulePing(ws);
     return true;
   }
 
@@ -364,7 +373,24 @@ export class GameRoom implements DurableObject {
     playerId: string,
     msg: ClientMessage,
   ): Promise<void> {
-    if (msg.type !== "submit_answer") return;
+    if (msg.type !== "submit_answer" && msg.type !== "send_reaction") return;
+
+    if (msg.type === "send_reaction") {
+      const player = this.players.get(playerId);
+      if (!player) return;
+      // Rate-limit: cap at 1 reaction per 3 seconds per player (via tag timestamp)
+      const gifUrl = msg.gifUrl?.trim() ?? "";
+      if (!gifUrl) return;
+      this.broadcast({
+        type: "reaction",
+        playerId,
+        displayName: player.displayName,
+        avatarEmoji: player.avatarEmoji,
+        gifUrl,
+        caption: (msg.caption ?? "").slice(0, 60),
+      });
+      return;
+    }
 
     if (this.phase !== "question") {
       this.sendTo(ws, { type: "error", message: "No active question", code: "NO_QUESTION" });
@@ -398,13 +424,51 @@ export class GameRoom implements DurableObject {
       .filter((a) => a.is_correct)
       .map((a) => a.id);
 
-    const isCorrect = evaluateAnswer(msg.answerIds, correctIds, question.type);
+    // Correct ordering for puzzle (by order_index)
+    const correctOrder = [...question.answer_options]
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((a) => a.id);
+
+    let isCorrect = false;
+    let answerText: string | undefined;
+    let sliderValue: number | undefined;
+
+    switch (question.type) {
+      case "classic":
+      case "multiple":
+      case "truefalse":
+        isCorrect = evaluateAnswer(msg.answerIds ?? [], correctIds, question.type);
+        break;
+      case "puzzle":
+        isCorrect = evaluatePuzzle(msg.answerIds ?? [], correctOrder);
+        break;
+      case "typeanswer":
+        answerText = (msg.answerText ?? "").trim();
+        isCorrect = evaluateTypeanswer(
+          answerText,
+          question.answer_options.filter((a) => a.is_correct).map((a) => a.text),
+        );
+        break;
+      case "slider":
+        sliderValue = msg.sliderValue;
+        if (sliderValue !== undefined && question.config) {
+          isCorrect = evaluateSlider(sliderValue, question.config as SliderConfig);
+        }
+        break;
+      case "pinanswer":
+        if (msg.pinCoords && question.config) {
+          isCorrect = evaluatePinanswer(msg.pinCoords, question.config as PinAnswerConfig);
+        }
+        break;
+    }
     const responseMs = Math.min(serverResponseMs, timeLimitMs);
     const points = calculateScore(question.points, question.time_limit, responseMs, isCorrect);
 
     const submission: SubmissionInMemory = {
       playerId,
-      answerIds: msg.answerIds,
+      answerIds: msg.answerIds ?? [],
+      ...(answerText !== undefined && { answerText }),
+      ...(sliderValue !== undefined && { sliderValue }),
       responseTimeMs: responseMs,
       isCorrect,
       pointsEarned: points,
@@ -424,7 +488,9 @@ export class GameRoom implements DurableObject {
       session_id: this.sessionId,
       player_id: playerId,
       question_id: question.id,
-      answer_option_ids: JSON.stringify(msg.answerIds),
+      answer_option_ids: JSON.stringify(
+        msg.answerIds ?? msg.answerText ?? msg.sliderValue ?? msg.pinCoords ?? []
+      ),
       is_correct: isCorrect ? 1 : 0,
       points_earned: points,
       response_time_ms: responseMs,
@@ -492,15 +558,71 @@ export class GameRoom implements DurableObject {
     this.phase = "revealing";
 
     const q = this.questions[this.currentQuestionIndex]!;
-    const correctIds = q.answer_options.filter((a) => a.is_correct).map((a) => a.id);
+    const submissions = this.submissions.get(q.id) ?? [];
 
-    // Build answer distribution
+    // Correct IDs in option order (used for classic/multiple/truefalse)
+    const correctIds = q.answer_options.filter((a) => a.is_correct).map((a) => a.id);
+    // Correct IDs in puzzle order (used for puzzle)
+    const correctOrder = [...q.answer_options]
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((a) => a.id);
+
+    // Build answer distribution per type
     const distribution: Record<string, number> = {};
-    for (const opt of q.answer_options) distribution[opt.id] = 0;
-    for (const sub of this.submissions.get(q.id) ?? []) {
-      for (const aid of sub.answerIds) {
-        if (aid in distribution) distribution[aid]!++;
+    if (q.type === "classic" || q.type === "multiple" || q.type === "truefalse") {
+      for (const opt of q.answer_options) distribution[opt.id] = 0;
+      for (const sub of submissions) {
+        for (const aid of sub.answerIds) {
+          if (aid in distribution) distribution[aid]!++;
+        }
       }
+    } else if (q.type === "typeanswer") {
+      for (const sub of submissions) {
+        if (sub.answerText) {
+          const key = sub.answerText.trim().toLowerCase();
+          distribution[key] = (distribution[key] ?? 0) + 1;
+        }
+      }
+    } else if (q.type === "slider") {
+      for (const sub of submissions) {
+        if (sub.sliderValue !== undefined) {
+          const key = `${sub.sliderValue}`;
+          distribution[key] = (distribution[key] ?? 0) + 1;
+        }
+      }
+    } else {
+      // puzzle / pinanswer: binary
+      distribution.correct = 0;
+      distribution.wrong = 0;
+      for (const sub of submissions) {
+        if (sub.isCorrect) distribution.correct!++;
+        else distribution.wrong!++;
+      }
+    }
+
+    // Build revealData for non-standard types
+    let revealData: RevealData | undefined;
+    if (q.type === "typeanswer") {
+      revealData = {
+        type: "typeanswer",
+        correctTexts: q.answer_options.filter((a) => a.is_correct).map((a) => a.text),
+      };
+    } else if (q.type === "slider" && q.config) {
+      const cfg = q.config as SliderConfig;
+      revealData = { type: "slider", sliderCorrect: cfg.correct, sliderTolerance: cfg.tolerance };
+    } else if (q.type === "puzzle") {
+      revealData = {
+        type: "puzzle",
+        correctTexts: [...q.answer_options]
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((a) => a.text),
+      };
+    } else if (q.type === "pinanswer" && q.config) {
+      const cfg = q.config as PinAnswerConfig;
+      revealData = {
+        type: "pinanswer",
+        pinHotspot: { x: cfg.hotspotX, y: cfg.hotspotY, radius: cfg.hotspotRadius },
+      };
     }
 
     // Update D1 player scores
@@ -508,7 +630,12 @@ export class GameRoom implements DurableObject {
       void updatePlayerScore(this.env.DB, p.id, p.score);
     }
 
-    this.broadcast({ type: "question_end", correctAnswerIds: correctIds, distribution });
+    this.broadcast({
+      type: "question_end",
+      correctAnswerIds: q.type === "puzzle" ? correctOrder : correctIds,
+      distribution,
+      ...(revealData !== undefined && { revealData }),
+    });
     await this.persistMeta();
   }
 
@@ -542,12 +669,8 @@ export class GameRoom implements DurableObject {
     // Persist final state
     await this.persistMeta();
 
-    // Close all connections gracefully after a short delay
-    setTimeout(() => {
-      for (const ws of this.state.getWebSockets()) {
-        ws.close(1000, "Game over");
-      }
-    }, 5000);
+    // Schedule connection close via alarm (setTimeout doesn't survive DO hibernation)
+    await this.state.storage.setAlarm(Date.now() + 5000);
   }
 
   // ─── Broadcast helpers ────────────────────────────────────────────────────
@@ -582,28 +705,33 @@ export class GameRoom implements DurableObject {
     }
   }
 
-  // ─── Heartbeat ────────────────────────────────────────────────────────────
-
-  private schedulePing(ws: WebSocket): void {
-    const interval = setInterval(() => {
-      try {
-        ws.send(JSON.stringify({ type: "ping" }));
-      } catch {
-        clearInterval(interval);
-      }
-    }, 20_000);
-  }
-
   // ─── State helpers ────────────────────────────────────────────────────────
 
   private buildQuestionPayload(q: QuestionWithAnswers) {
-    return {
+    // Shuffle answer options for puzzle so players see random order
+    let options = q.answer_options.map((a) => ({ id: a.id, text: a.text }));
+    if (q.type === "puzzle") {
+      for (let i = options.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [options[i], options[j]] = [options[j]!, options[i]!];
+      }
+    }
+
+    const payload: import("../types/index.js").QuestionPayload = {
       id: q.id,
       text: q.text,
       imageUrl: q.image_url,
       type: q.type,
-      answerOptions: q.answer_options.map((a) => ({ id: a.id, text: a.text })),
+      answerOptions: options,
     };
+
+    // Include player-safe slider config (no correct value)
+    if (q.type === "slider" && q.config) {
+      const cfg = q.config as SliderConfig;
+      payload.sliderConfig = { min: cfg.min, max: cfg.max, step: cfg.step };
+    }
+
+    return payload;
   }
 
   private buildCurrentLeaderboard(): LeaderboardEntry[] {
@@ -611,6 +739,7 @@ export class GameRoom implements DurableObject {
       [...this.players.values()].map((p) => ({
         id: p.id,
         displayName: p.displayName,
+        avatarEmoji: p.avatarEmoji,
         score: p.score,
       })),
       this.prevScores,
@@ -672,7 +801,7 @@ export class GameRoom implements DurableObject {
   private async persistPlayers(): Promise<void> {
     const data: StoredPlayers = [...this.players.entries()].map(([id, p]) => [
       id,
-      { id: p.id, displayName: p.displayName, score: p.score, disconnectedAt: p.disconnectedAt },
+      { id: p.id, displayName: p.displayName, avatarEmoji: p.avatarEmoji, score: p.score, disconnectedAt: p.disconnectedAt },
     ]);
     await this.state.storage.put(S.PLAYERS, data);
   }
