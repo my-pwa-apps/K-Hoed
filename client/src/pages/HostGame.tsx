@@ -11,15 +11,15 @@ import { GiphyChat } from "@/components/game/GiphyChat";
 import { ReactionOverlay } from "@/components/game/ReactionOverlay";
 import { useGameStore, initHostGame } from "@/stores/gameStore";
 import { useHostGame } from "@/hooks/useGame";
-import { useAuthStore } from "@/stores/authStore";
 import { gameApi } from "@/lib/api";
+import { JoinPanel } from "@/components/game/JoinPanel";
+import { MediaEmbed } from "@/components/game/MediaEmbed";
 import { useI18n } from "@/i18n";
 import { ANSWER_COLORS, ANSWER_SHAPES } from "@/lib/utils";
 
 export default function HostGame() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const token = useAuthStore((s) => s.token)!;
   const { t, interp } = useI18n();
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -42,7 +42,7 @@ export default function HostGame() {
   }, [sessionId, roomCode]);
 
   const store = useGameStore();
-  const { send } = useHostGame({ sessionId: sessionId!, roomCode, token });
+  const { send } = useHostGame({ sessionId: sessionId!, roomCode });
 
   if (store.role !== "host") return null;
 
@@ -89,14 +89,18 @@ export default function HostGame() {
             m: totalQuestions,
           })}
         </span>
-        <span className="font-mono font-bold text-white/70 text-sm">
-          {roomCode}
-        </span>
         <div className="flex items-center gap-2 text-white/70 text-sm">
           <Users size={14} aria-hidden />
           {players.length}
         </div>
       </div>
+
+      {/* Always-on join strip — compact QR + code visible even mid-game */}
+      {roomCode && (
+        <div className="px-4 pt-3">
+          <JoinPanel roomCode={roomCode} dark compact />
+        </div>
+      )}
 
       <div className="flex-1 flex flex-col items-center justify-start px-4 py-8 max-w-4xl mx-auto w-full gap-6">
 
@@ -134,6 +138,11 @@ export default function HostGame() {
                   alt="Question illustration"
                   className="max-h-48 mx-auto rounded-2xl object-cover mb-4"
                 />
+              )}
+
+              {/* Media embed for audioclip / videoclip */}
+              {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
+                <MediaEmbed url={currentQuestion.mediaUrl} type={currentQuestion.type} />
               )}
 
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-shadow">
@@ -206,6 +215,31 @@ export default function HostGame() {
                   <div key={i} className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">{text}</div>
                 ))}
                 <p className="text-sm text-gray-400">{distribution[revealData.correctTexts[0]?.toLowerCase() ?? ""] ?? 0} exact matches recorded</p>
+              </div>
+            )}
+
+            {/* Audioclip reveal */}
+            {currentQuestion.type === "audioclip" && phase === "revealing" && revealData?.correctTexts && (
+              <div className="w-full bg-white rounded-3xl p-4 space-y-2">
+                <p className="font-semibold text-gray-700">🎵 Correct answer:</p>
+                <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">
+                  {revealData.correctTexts[0]}
+                </div>
+                {revealData.correctTexts[1] && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-2 text-amber-800 font-medium">
+                    Artist: {revealData.correctTexts[1]}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Videoclip reveal */}
+            {currentQuestion.type === "videoclip" && phase === "revealing" && revealData?.correctTexts && (
+              <div className="w-full bg-white rounded-3xl p-4 space-y-2">
+                <p className="font-semibold text-gray-700">🎬 Correct answer:</p>
+                <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">
+                  {revealData.correctTexts[0]}
+                </div>
               </div>
             )}
 

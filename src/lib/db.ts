@@ -352,15 +352,15 @@ export async function getSessionsByHost(
 
 export async function upsertSessionPlayer(
   db: D1Database,
-  player: Pick<SessionPlayerRow, "id" | "session_id" | "display_name">,
+  player: Pick<SessionPlayerRow, "id" | "session_id" | "display_name" | "avatar_emoji">,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO session_players (id, session_id, display_name, score, joined_at)
-       VALUES (?1, ?2, ?3, 0, ?4)
+      `INSERT INTO session_players (id, session_id, display_name, avatar_emoji, score, joined_at)
+       VALUES (?1, ?2, ?3, ?4, 0, ?5)
        ON CONFLICT(id) DO NOTHING`,
     )
-    .bind(player.id, player.session_id, player.display_name, Date.now())
+    .bind(player.id, player.session_id, player.display_name, player.avatar_emoji, Date.now())
     .run();
 }
 
@@ -429,4 +429,69 @@ export async function saveResults(
       .bind(r.id, r.session_id, r.player_id, r.points_earned, r.response_time_ms, Date.now()),
   );
   await db.batch(stmts);
+}
+
+// ─── WS Tickets (C1: keep JWT out of WS URL) ─────────────────────────────────
+
+export async function createWsTicket(
+  db: D1Database,
+  sessionId: string,
+  hostId: string,
+): Promise<string> {
+  // Remove any existing tickets for this session+host first
+  await db
+    .prepare("DELETE FROM ws_tickets WHERE session_id = ?1 AND host_id = ?2")
+    .bind(sessionId, hostId)
+    .run();
+
+  const ticket = crypto.randomUUID();
+  const expiresAt = Date.now() + 2 * 60 * 60_000; // 2 hours
+  await db
+    .prepare("INSERT INTO ws_tickets (id, session_id, host_id, expires_at) VALUES (?1, ?2, ?3, ?4)")
+    .bind(ticket, sessionId, hostId, expiresAt)
+    .run();
+  return ticket;
+}
+
+export async function consumeWsTicket(
+  db: D1Database,
+  ticket: string,
+): Promise<{ session_id: string; host_id: string } | null> {
+  const row = await db
+    .prepare("SELECT session_id, host_id FROM ws_tickets WHERE id = ?1 AND expires_at > ?2")
+    .bind(ticket, Date.now())
+    .first<{ session_id: string; host_id: string }>();
+  return row ?? null;
+}
+
+// ─── D1-backed rate limiting (C3: survives Worker cold starts) ───────────────
+
+export async function checkRateLimitD1(
+  db: D1Database,
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<boolean> {
+  const now = Date.now();
+  const row = await db
+    .prepare("SELECT count, window_start FROM rate_limits WHERE key = ?1")
+    .bind(key)
+    .first<{ count: number; window_start: number }>();
+
+  if (!row || now - row.window_start > windowMs) {
+    // New window — upsert with count 1
+    await db
+      .prepare("INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?1, 1, ?2)")
+      .bind(key, now)
+      .run();
+    return true;
+  }
+
+  if (row.count >= maxRequests) return false;
+
+  await db
+    .prepare("UPDATE rate_limits SET count = count + 1 WHERE key = ?1")
+    .bind(key)
+    .run();
+  return true;
 }

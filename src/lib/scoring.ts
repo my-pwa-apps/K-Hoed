@@ -11,7 +11,7 @@ export const SCORING = {
   /** Milliseconds of grace window for very fast answers */
   GRACE_MS: 200,
   /** Reconnect window: player identity preserved if they return within this */
-  RECONNECT_WINDOW_MS: 30_000,
+  RECONNECT_WINDOW_MS: 5 * 60_000,
 } as const;
 
 /**
@@ -37,6 +37,42 @@ export function calculateScore(
   // Score is between MIN_FRACTION and 1.0 of base points, rounded to nearest int
   const multiplier = SCORING.MIN_FRACTION + (1 - SCORING.MIN_FRACTION) * fraction;
   return Math.round(basePoints * multiplier);
+}
+
+/**
+ * Evaluate an audioclip answer.
+ * Returns { isCorrect, bonusPoints } where isCorrect = title correct.
+ */
+export function evaluateAudioClip(
+  titleAnswer: string,
+  artistAnswer: string | undefined,
+  config: import("../types/index.js").MediaClipConfig,
+): { isCorrect: boolean; bonusPoints: number } {
+  const isCorrect = config.songTitle
+    ? evaluateTypeanswer(titleAnswer, [config.songTitle])
+    : false;
+  const bonusPoints =
+    isCorrect &&
+    config.songArtist &&
+    artistAnswer &&
+    evaluateTypeanswer(artistAnswer, [config.songArtist])
+      ? (config.artistPoints ?? 500)
+      : 0;
+  return { isCorrect, bonusPoints };
+}
+
+/**
+ * Evaluate a videoclip answer (title of movie/series).
+ */
+export function evaluateVideoClip(
+  titleAnswer: string,
+  config: import("../types/index.js").MediaClipConfig,
+): boolean {
+  const accepted = [
+    ...(config.videoTitle ? [config.videoTitle] : []),
+    ...(config.songTitle ? [config.songTitle] : []),
+  ];
+  return accepted.length > 0 ? evaluateTypeanswer(titleAnswer, accepted) : false;
 }
 
 /**

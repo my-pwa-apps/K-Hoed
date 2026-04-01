@@ -64,6 +64,7 @@ export const gameApi = {
     lookupByCode: (code) => request(`/api/games/${code}`),
     listSessions: () => request("/api/games"),
     results: (sessionId) => request(`/api/games/session/${sessionId}/results`),
+    requestWsTicket: (sessionId) => request(`/api/games/session/${sessionId}/ws-ticket`, { method: "POST" }),
 };
 // ─── Upload ───────────────────────────────────────────────────────────────────
 const MAX_IMAGE_DIMENSION = 800;

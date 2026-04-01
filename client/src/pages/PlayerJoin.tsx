@@ -10,6 +10,7 @@ import { gameApi } from "@/lib/api";
 import { initPlayerGame } from "@/stores/gameStore";
 import { useI18n } from "@/i18n";
 import { AVATARS, type AvatarEmoji } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 
 type Step = "info" | "avatar";
 
@@ -20,13 +21,40 @@ export default function PlayerJoin() {
   const kicked = new URLSearchParams(location.search).has("kicked");
 
   const [step, setStep] = useState<Step>("info");
-  const [code, setCode] = useState(codeFromUrl?.toUpperCase() ?? "");
-  const [displayName, setDisplayName] = useState("");
+
+  // Determine if we have a localStorage-saved game session for reconnect hint
+  const savedSession = (() => {
+    if (codeFromUrl) return null;
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith("player-"));
+    for (const key of keys) {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as { playerId?: string; displayName?: string };
+          if (parsed.playerId) return { roomCode: key.replace("player-", "").toUpperCase(), displayName: parsed.displayName };
+        } catch { /* ignore */ }
+      }
+    }
+    return null;
+  })();
+
+  const [code, setCode] = useState<string>(
+    () => codeFromUrl?.toUpperCase() ?? savedSession?.roomCode ?? "",
+  );
+  const [displayName, setDisplayName] = useState(
+    () => localStorage.getItem("k-hoed-display-name") ?? "",
+  );
   const [avatar, setAvatar] = useState<AvatarEmoji | "">(
-    AVATARS[Math.floor(Math.random() * AVATARS.length)]!,
+    () => (localStorage.getItem("k-hoed-avatar") as AvatarEmoji | null)
+      ?? AVATARS[Math.floor(Math.random() * AVATARS.length)]!,
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(kicked ? t.join.kicked : null);
+
+  const handleSelectAvatar = (a: AvatarEmoji | "") => {
+    setAvatar(a);
+    if (a) localStorage.setItem("k-hoed-avatar", a as string);
+  };
 
   const goToAvatar = (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +75,8 @@ export default function PlayerJoin() {
       const storageKey = `player-${session.room_code}`;
       let playerId: string;
       try {
-        const raw = sessionStorage.getItem(storageKey);
+        // Use localStorage so reconnection survives browser close (e.g. dead battery)
+        const raw = localStorage.getItem(storageKey);
         const stored = raw ? (JSON.parse(raw) as { playerId?: string }) : {};
         playerId = stored.playerId ?? crypto.randomUUID();
       } catch {
@@ -55,7 +84,7 @@ export default function PlayerJoin() {
       }
 
       initPlayerGame(session.session_id, session.room_code, playerId, trimName, avatar);
-      sessionStorage.setItem(
+      localStorage.setItem(
         storageKey,
         JSON.stringify({ playerId, displayName: trimName, avatarEmoji: avatar }),
       );
@@ -130,6 +159,11 @@ export default function PlayerJoin() {
                   <p id="room-code-hint" className="mt-1 text-xs text-gray-400 text-center">
                     {t.join.room_code_hint}
                   </p>
+                  {savedSession && code.toUpperCase() === savedSession.roomCode && (
+                    <p className="mt-1 text-xs text-indigo-500 font-medium text-center">
+                      👋 Welcome back{savedSession.displayName ? `, ${savedSession.displayName}` : ""}! Tap <em>Next</em> to rejoin.
+                    </p>
+                  )}
                 </div>
 
                 <Input
@@ -139,7 +173,10 @@ export default function PlayerJoin() {
                   placeholder={t.join.nickname_placeholder}
                   maxLength={30}
                   value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
+                  onChange={(e) => {
+                    setDisplayName(e.target.value);
+                    localStorage.setItem("k-hoed-display-name", e.target.value);
+                  }}
                 />
 
                 <Button type="submit" fullWidth size="lg">
@@ -174,12 +211,14 @@ export default function PlayerJoin() {
                   </p>
                   <p className="text-sm text-gray-500">{displayName}</p>
                 </div>
-                <span className="ml-auto text-4xl">{avatar}</span>
+                <span className="ml-auto">
+                  {avatar && <PlayerAvatar value={avatar} name={displayName} size="lg" />}
+                </span>
               </div>
 
               <AvatarPicker
                 selected={avatar}
-                onSelect={(a) => setAvatar(a)}
+                onSelect={(a) => handleSelectAvatar(a)}
               />
 
               <Button

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { quizApi, uploadApi, brainstormApi } from "@/lib/api";
-import type { QuestionType, QuestionConfig, SliderConfig, PinAnswerConfig, BrainstormItem, BrainstormStatus } from "@/lib/types";
+import type { QuestionType, QuestionConfig, SliderConfig, PinAnswerConfig, MediaClipConfig, BrainstormItem, BrainstormStatus } from "@/lib/types";
 import { newLocalId } from "@/pages/QuizEditor.utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -176,12 +176,14 @@ export default function QuizEditor() {
           points: q.points,
           order_index: qi,
           config: q.config ?? undefined,
-          answer_options: q.answer_options.map((a, ai) => ({
-            id: a.id.startsWith("local-") ? undefined : a.id,
-            text: a.text,
-            is_correct: a.is_correct,
-            order_index: ai,
-          })),
+          answer_options: q.answer_options
+            .filter((a) => a.text.trim().length > 0)
+            .map((a, ai) => ({
+              id: a.id.startsWith("local-") ? undefined : a.id,
+              text: a.text,
+              is_correct: a.is_correct,
+              order_index: ai,
+            })),
         })),
       };
       if (isNew) return quizApi.create(payload);
@@ -259,6 +261,12 @@ export default function QuizEditor() {
       options = [
         { id: newLocalId(), text: "", is_correct: true, order_index: 0 },
       ];
+    } else if (type === "audioclip") {
+      options = [];
+      config = { mediaUrl: "", songTitle: "", songArtist: "", artistPoints: 500 } as MediaClipConfig;
+    } else if (type === "videoclip") {
+      options = [];
+      config = { mediaUrl: "", songTitle: "" } as MediaClipConfig;
     } else if (type === "puzzle") {
       // All items are part of the puzzle; correct order = array order
       options = (options.length >= 2 ? options : [
@@ -321,6 +329,16 @@ export default function QuizEditor() {
     return <div className="text-gray-400 text-center py-20">Loading quiz…</div>;
   }
 
+  const canSave =
+    title.trim().length > 0 &&
+    (questions.length === 0 ||
+      questions.every(
+        (q) =>
+          q.type === "slider" ||
+          q.type === "pinanswer" ||
+          q.answer_options.some((a) => a.is_correct && a.text.trim().length > 0),
+      ));
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
@@ -335,7 +353,7 @@ export default function QuizEditor() {
           <Button
             onClick={() => saveMutation.mutate()}
             loading={saveMutation.isPending}
-            disabled={!title.trim()}
+            disabled={!canSave}
           >
             {isNew ? "Create quiz" : "Save changes"}
           </Button>
@@ -560,16 +578,18 @@ function QuestionCard({
   onChangeType,
 }: QuestionCardProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setUploadError(null);
     try {
       const { url } = await uploadApi.image(file);
       onUpdate({ image_url: url });
-    } catch {
-      // TODO: show upload error to user
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed. Please try a smaller image.");
     } finally {
       setUploading(false);
     }
@@ -639,6 +659,8 @@ function QuestionCard({
                 <option value="slider">Slider</option>
                 <option value="puzzle">Puzzle (order)</option>
                 <option value="pinanswer">Pin answer</option>
+                <option value="audioclip">🎵 Song clip</option>
+                <option value="videoclip">🎬 Video / movie clip</option>
               </select>
             </div>
 
@@ -713,6 +735,9 @@ function QuestionCard({
                   </span>
                 )}
               </label>
+            )}
+            {uploadError && (
+              <p role="alert" className="text-xs text-danger-500 mt-1">{uploadError}</p>
             )}
           </div>
 
@@ -795,8 +820,68 @@ function QuestionCard({
             </div>
           )}
 
-          {/* Classic answer options — hidden for slider, pinanswer */}
-          {q.type !== "slider" && q.type !== "pinanswer" && (
+          {/* Media clip config */}
+          {(q.type === "audioclip" || q.type === "videoclip") && (
+            <div className="space-y-3 bg-gray-50 rounded-xl p-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {q.type === "audioclip" ? "🎵 Song clip config" : "🎬 Video / movie clip config"}
+              </p>
+              <div>
+                <label className="label text-xs">Media URL (YouTube, MP3, MP4…)</label>
+                <input
+                  type="url"
+                  title="Media URL"
+                  className="input py-2 text-sm"
+                  placeholder="https://youtube.com/watch?v=…"
+                  value={(q.config as MediaClipConfig | null)?.mediaUrl ?? ""}
+                  onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), mediaUrl: e.target.value } })}
+                />
+              </div>
+              <div>
+                <label className="label text-xs">{q.type === "audioclip" ? "Correct song title" : "Correct movie / series title"}</label>
+                <input
+                  type="text"
+                  title="Correct title"
+                  className="input py-2 text-sm border-emerald-400 bg-emerald-50"
+                  placeholder={q.type === "audioclip" ? "Song title" : "Movie or series title"}
+                  value={(q.config as MediaClipConfig | null)?.songTitle ?? ""}
+                  onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), songTitle: e.target.value } })}
+                />
+              </div>
+              {q.type === "audioclip" && (
+                <>
+                  <div>
+                    <label className="label text-xs">Artist name (optional — bonus points)</label>
+                    <input
+                      type="text"
+                      title="Artist name"
+                      className="input py-2 text-sm"
+                      placeholder="Leave blank to skip artist bonus"
+                      value={(q.config as MediaClipConfig | null)?.songArtist ?? ""}
+                      onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), songArtist: e.target.value } })}
+                    />
+                  </div>
+                  {(q.config as MediaClipConfig | null)?.songArtist && (
+                    <div>
+                      <label className="label text-xs">Artist bonus points</label>
+                      <input
+                        type="number"
+                        title="Artist bonus points"
+                        className="input py-2 text-sm"
+                        min={0}
+                        step={100}
+                        value={(q.config as MediaClipConfig | null)?.artistPoints ?? 500}
+                        onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), artistPoints: Number(e.target.value) } })}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Classic answer options — hidden for slider, pinanswer, audioclip, videoclip */}
+          {q.type !== "slider" && q.type !== "pinanswer" && q.type !== "audioclip" && q.type !== "videoclip" && (
           <div className="space-y-2">
             {q.type === "typeanswer" && (
               <p className="text-xs text-gray-500">Acceptable answers — player’s text must match one (case-insensitive).</p>

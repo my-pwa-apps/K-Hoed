@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Send, MessageSquare, X } from "lucide-react";
 import { useReactionStore } from "@/stores/reactionStore";
 import { useI18n } from "@/i18n";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 // ─────────────────────────────────────────────────────────────────────────────
 // Giphy API (public beta key — replace with your own in production)
 // https://developers.giphy.com/docs/api/endpoint#search
@@ -67,7 +68,7 @@ export function GiphyChat({ send, variant = "player" }) {
                     .slice()
                     .reverse()
                     .slice(0, 3)
-                    .map((r) => (_jsxs("div", { className: "flex items-center gap-2 text-xs text-gray-500", children: [_jsx("span", { children: r.avatarEmoji }), _jsx("span", { className: "font-medium truncate max-w-[80px]", children: r.displayName }), _jsx("img", { src: r.gifUrl, alt: r.caption, className: "h-8 rounded-lg object-cover" })] }, r.id))) }))] }, "panel"));
+                    .map((r) => (_jsxs("div", { className: "flex items-center gap-2 text-xs text-gray-500", children: [_jsx(PlayerAvatar, { value: r.avatarEmoji, name: r.displayName, size: "xs" }), _jsx("span", { className: "font-medium truncate max-w-[80px]", children: r.displayName }), _jsx("img", { src: r.gifUrl, alt: r.caption, className: "h-8 rounded-lg object-cover" })] }, r.id))) }))] }, "panel"));
     if (variant === "host") {
         return panel;
     }

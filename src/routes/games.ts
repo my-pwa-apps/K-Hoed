@@ -8,6 +8,8 @@ import {
   getSessionById,
   getSessionsByHost,
   getSessionPlayers,
+  createWsTicket,
+  checkRateLimitD1,
 } from "../lib/db.js";
 import { generateRoomCode, newId } from "../lib/room-code.js";
 import { checkRateLimit } from "../lib/rate-limit.js";
@@ -131,5 +133,23 @@ app.get("/session/:id/results", requireAuth, async (c) => {
   const players = await getSessionPlayers(c.env.DB, session.id);
   return c.json({ success: true, data: { session, players } });
 });
+// ─── POST /games/session/:id/ws-ticket ──────────────────────────────────────────
+// Returns a short-lived ticket that is used instead of the JWT in the WS URL.
 
+app.post("/session/:id/ws-ticket", requireAuth, async (c) => {
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  if (!await checkRateLimitD1(c.env.DB, `ws-ticket:${ip}`, 20, 60_000)) {
+    return c.json({ success: false, error: "Too many requests" }, 429);
+  }
+
+  const user = c.get("user");
+  const sessionId = c.req.param("id");
+  const session = await getSessionById(c.env.DB, sessionId);
+  if (!session) return c.json({ success: false, error: "Session not found" }, 404);
+  if (session.host_id !== user.sub) return c.json({ success: false, error: "Forbidden" }, 403);
+  if (session.status === "ended") return c.json({ success: false, error: "Game has ended" }, 410);
+
+  const ticket = await createWsTicket(c.env.DB, sessionId, user.sub);
+  return c.json({ success: true, data: { ticket } });
+});
 export { app as gameRoutes };

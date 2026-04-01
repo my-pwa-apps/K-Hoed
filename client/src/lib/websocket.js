@@ -139,8 +139,8 @@ export function buildWsUrl(roomCode, role, params) {
     const url = new URL(`${protocol}//${host}/api/rooms/${roomCode}/ws`);
     url.searchParams.set("role", role);
     url.searchParams.set("sessionId", params.sessionId);
-    if (params.token)
-        url.searchParams.set("token", params.token);
+    if (params.ticket)
+        url.searchParams.set("ticket", params.ticket);
     if (params.displayName)
         url.searchParams.set("displayName", params.displayName);
     if (params.playerId)

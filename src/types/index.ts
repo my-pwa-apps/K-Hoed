@@ -7,7 +7,9 @@ export type QuestionType =
   | "typeanswer"
   | "slider"
   | "puzzle"
-  | "pinanswer";
+  | "pinanswer"
+  | "audioclip"
+  | "videoclip";
 export type GameStatus = "lobby" | "active" | "ended";
 export type RoomPhase = "lobby" | "question" | "revealing" | "leaderboard" | "ended";
 
@@ -29,7 +31,20 @@ export interface PinAnswerConfig {
   hotspotRadius: number;
 }
 
-export type QuestionConfig = SliderConfig | PinAnswerConfig | null;
+export interface MediaClipConfig {
+  /** YouTube URL, direct audio/video URL, or any embeddable media URL */
+  mediaUrl: string;
+  /** For audioclip: correct song title (evaluated like typeanswer) */
+  songTitle?: string;
+  /** For audioclip: correct artist name (bonus points) */
+  songArtist?: string;
+  /** Points awarded for correct artist answer (default 500) */
+  artistPoints?: number;
+  /** For videoclip: correct title of the movie/series/show */
+  videoTitle?: string;
+}
+
+export type QuestionConfig = SliderConfig | PinAnswerConfig | MediaClipConfig | null;
 
 export type BrainstormStatus = "proposed" | "shortlisted" | "added";
 
@@ -113,6 +128,7 @@ export interface SessionPlayerRow {
   id: string;
   session_id: string;
   display_name: string;
+  avatar_emoji: string;
   score: number;
   joined_at: number;
 }
@@ -224,8 +240,10 @@ export type ClientMessage =
       questionId: string;
       /** classic / multiple / truefalse / puzzle (ordered ids) */
       answerIds?: string[];
-      /** typeanswer */
+      /** typeanswer / audioclip song title / videoclip title */
       answerText?: string;
+      /** audioclip artist (bonus) */
+      answerText2?: string;
       /** slider */
       sliderValue?: number;
       /** pinanswer – normalised 0-1 coordinates */
@@ -248,6 +266,10 @@ export type ServerMessage =
       playerCount: number;
       players?: PlayerSnapshot[];
       currentQuestionIndex: number;
+      /** Sent to reconnecting players to restore their score display */
+      totalScore?: number;
+      /** Sent to reconnecting players when in leaderboard/ended phase */
+      leaderboard?: LeaderboardEntry[];
     }
   | { type: "player_joined"; player: PlayerSnapshot }
   | { type: "player_left"; playerId: string; displayName: string }
@@ -299,6 +321,12 @@ export interface QuestionPayload {
   answerOptions: { id: string; text: string }[];
   /** Only for slider – excludes the correct value */
   sliderConfig?: { min: number; max: number; step: number };
+  /** For audioclip / videoclip – sent to all players so they can render the media */
+  mediaUrl?: string;
+  /** For audioclip – whether artist field is enabled */
+  hasArtist?: boolean;
+  /** For audioclip – max bonus points for artist */
+  artistPoints?: number;
 }
 
 // ─── API response shapes ──────────────────────────────────────────────────────

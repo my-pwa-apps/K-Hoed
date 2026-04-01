@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { CheckCircle, XCircle, Clock, GripVertical } from "lucide-react";
@@ -16,6 +16,10 @@ interface LocationState {
   roomCode: string;
 }
 
+import { MediaEmbed } from "@/components/game/MediaEmbed";
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function PlayerGame() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -24,10 +28,29 @@ export default function PlayerGame() {
 
   // Local state for new question types
   const [textAnswer, setTextAnswer] = useState("");
+  const [textAnswer2, setTextAnswer2] = useState(""); // audioclip artist
   const [sliderVal, setSliderVal] = useState<number | null>(null);
   const [puzzleItems, setPuzzleItems] = useState<{ id: string; text: string }[]>([]);
   const [pinCoords, setPinCoords] = useState<{ x: number; y: number } | null>(null);
   const store = useGameStore();
+
+  // N1: simple Web Audio beep — avoids loading external assets
+  const playTone = useCallback((freq: number, duration: number, type: OscillatorType = "sine") => {
+    try {
+      const ctx = new AudioContext();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+      void ctx.close();
+    } catch { /* audio not available */ }
+  }, []);
 
   useEffect(() => {
     if (!state?.sessionId) navigate("/join", { replace: true });
@@ -61,6 +84,7 @@ export default function PlayerGame() {
   useEffect(() => {
     if (!currentQuestion) return;
     setTextAnswer("");
+    setTextAnswer2("");
     setSliderVal(null);
     setPinCoords(null);
     if (currentQuestion.type === "puzzle") {
@@ -78,6 +102,8 @@ export default function PlayerGame() {
 
   const handleSubmit = () => {
     if (!currentQuestion || answerSubmitted) return;
+    // N1: haptic pulse on mobile
+    navigator.vibrate?.(50);
     const base = { type: "submit_answer" as const, questionId: currentQuestion.id, clientTimestamp: Date.now() };
     switch (currentQuestion.type) {
       case "classic":
@@ -93,6 +119,14 @@ export default function PlayerGame() {
         if (!textAnswer.trim()) return;
         send({ ...base, answerText: textAnswer.trim() });
         break;
+      case "audioclip":
+        if (!textAnswer.trim()) return;
+        send({ ...base, answerText: textAnswer.trim(), answerText2: textAnswer2.trim() || undefined });
+        break;
+      case "videoclip":
+        if (!textAnswer.trim()) return;
+        send({ ...base, answerText: textAnswer.trim() });
+        break;
       case "slider":
         if (sliderVal === null) return;
         send({ ...base, sliderValue: sliderVal });
@@ -103,6 +137,19 @@ export default function PlayerGame() {
         break;
     }
   };
+
+  // N1: play sound when answer result arrives
+  useEffect(() => {
+    if (!lastResult) return;
+    if (lastResult.correct) {
+      playTone(880, 0.15); // high ding for correct
+      setTimeout(() => playTone(1100, 0.1), 130);
+    } else {
+      playTone(330, 0.25, "square"); // low buzz for wrong
+    }
+    navigator.vibrate?.(lastResult.correct ? [30, 30, 60] : [100]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastResult]);
 
   // Auto-submit for single-answer questions on selection
   useEffect(() => {
@@ -176,6 +223,13 @@ export default function PlayerGame() {
                     className="max-h-28 mx-auto rounded-xl object-cover mb-2"
                   />
                 )}
+                {/* Media embed for audioclip / videoclip */}
+                {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
+                  <MediaEmbed
+                    url={currentQuestion.mediaUrl}
+                    type={currentQuestion.type}
+                  />
+                )}
                 <p className="font-display font-bold text-xl text-gray-900 text-center leading-snug">
                   {currentQuestion.text}
                 </p>
@@ -238,6 +292,58 @@ export default function PlayerGame() {
                   disabled={answerSubmitted}
                   autoFocus
                   aria-label="Type your answer"
+                />
+                <Button fullWidth size="lg" disabled={!textAnswer.trim() || answerSubmitted} onClick={handleSubmit}>
+                  {t.player_game.submit}
+                </Button>
+              </div>
+            )}
+
+            {/* Audio clip — title + optional artist */}
+            {currentQuestion.type === "audioclip" && (
+              <div className="w-full space-y-3">
+                <input
+                  type="text"
+                  className="input w-full text-lg py-4 text-center"
+                  placeholder="Song title…"
+                  value={textAnswer}
+                  onChange={(e) => setTextAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !textAnswer2) handleSubmit(); }}
+                  disabled={answerSubmitted}
+                  autoFocus
+                  aria-label="Song title"
+                />
+                {currentQuestion.hasArtist && (
+                  <input
+                    type="text"
+                    className="input w-full py-4 text-center border-amber-300"
+                    placeholder={`Artist name (🏅 +${currentQuestion.artistPoints ?? 500} bonus pts)`}
+                    value={textAnswer2}
+                    onChange={(e) => setTextAnswer2(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                    disabled={answerSubmitted}
+                    aria-label="Artist name (bonus)"
+                  />
+                )}
+                <Button fullWidth size="lg" disabled={!textAnswer.trim() || answerSubmitted} onClick={handleSubmit}>
+                  {t.player_game.submit}
+                </Button>
+              </div>
+            )}
+
+            {/* Video clip */}
+            {currentQuestion.type === "videoclip" && (
+              <div className="w-full space-y-3">
+                <input
+                  type="text"
+                  className="input w-full text-lg py-4 text-center"
+                  placeholder="Movie or series title…"
+                  value={textAnswer}
+                  onChange={(e) => setTextAnswer(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+                  disabled={answerSubmitted}
+                  autoFocus
+                  aria-label="Movie or series title"
                 />
                 <Button fullWidth size="lg" disabled={!textAnswer.trim() || answerSubmitted} onClick={handleSubmit}>
                   {t.player_game.submit}

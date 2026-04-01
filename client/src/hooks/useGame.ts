@@ -1,18 +1,30 @@
 import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useGameStore } from "@/stores/gameStore";
 import { useGameWebSocket } from "./useWebSocket";
+import { gameApi } from "@/lib/api";
 import type { ServerMessage } from "@/lib/types";
 
 interface UseHostGameOptions {
   sessionId: string;
   roomCode: string;
-  token: string;
+  // token no longer required here — hook fetches its own WS ticket (C1 fix)
 }
 
-export function useHostGame({ sessionId, roomCode, token }: UseHostGameOptions) {
+export function useHostGame({ sessionId, roomCode }: UseHostGameOptions) {
   const store = useGameStore();
   const navigate = useNavigate();
+
+  // Fetch a short-lived WS ticket (keeps JWT out of the WebSocket URL)
+  const { data: ticketData } = useQuery({
+    queryKey: ["ws-ticket", sessionId],
+    queryFn: () => gameApi.requestWsTicket(sessionId),
+    enabled: !!sessionId,
+    staleTime: 90 * 60_000,
+    retry: false,
+  });
+  const ticket = ticketData?.ticket;
 
   const onMessage = useRef((msg: ServerMessage) => {
     if (msg.type === "game_ended") {
@@ -38,8 +50,9 @@ export function useHostGame({ sessionId, roomCode, token }: UseHostGameOptions) 
     roomCode,
     role: "host",
     sessionId,
-    token,
+    ticket,
     onMessage: (msg) => onMessage.current(msg),
+    enabled: !!roomCode && !!ticket,
   });
 
   return { store, status, send };
@@ -92,11 +105,11 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }: Us
     onMessage: (msg) => onMessage.current(msg),
   });
 
-  // Persist playerId to sessionStorage for reconnection
+  // Persist to localStorage (not sessionStorage) so reconnection survives browser close
   useEffect(() => {
     if (playerId)
-      sessionStorage.setItem(`player-${roomCode}`, JSON.stringify({ playerId, displayName }));
-  }, [playerId, displayName, roomCode]);
+      localStorage.setItem(`player-${roomCode}`, JSON.stringify({ playerId, displayName, avatarEmoji }));
+  }, [playerId, displayName, roomCode, avatarEmoji]);
 
   return { store, status, send };
 }

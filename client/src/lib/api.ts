@@ -122,6 +122,9 @@ export const gameApi = {
     request<{ session: import("./types").QuizSession; players: import("./types").SessionPlayer[] }>(
       `/api/games/session/${sessionId}/results`,
     ),
+
+  requestWsTicket: (sessionId: string) =>
+    request<{ ticket: string }>(`/api/games/session/${sessionId}/ws-ticket`, { method: "POST" }),
 };
 
 // ─── Upload ───────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { Search, Send, MessageSquare, X } from "lucide-react";
 import type { ClientMessage } from "@/lib/types";
 import { useReactionStore } from "@/stores/reactionStore";
 import { useI18n } from "@/i18n";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Giphy API (public beta key — replace with your own in production)
@@ -176,7 +177,7 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
             .slice(0, 3)
             .map((r) => (
               <div key={r.id} className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{r.avatarEmoji}</span>
+                <PlayerAvatar value={r.avatarEmoji} name={r.displayName} size="xs" />
                 <span className="font-medium truncate max-w-[80px]">{r.displayName}</span>
                 <img src={r.gifUrl} alt={r.caption} className="h-8 rounded-lg object-cover" />
               </div>

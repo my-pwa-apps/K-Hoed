@@ -7,7 +7,9 @@ export type QuestionType =
   | "typeanswer"
   | "slider"
   | "puzzle"
-  | "pinanswer";
+  | "pinanswer"
+  | "audioclip"
+  | "videoclip";
 export type GameStatus = "lobby" | "active" | "ended";
 export type RoomPhase = "lobby" | "question" | "revealing" | "leaderboard" | "ended";
 
@@ -25,7 +27,15 @@ export interface PinAnswerConfig {
   hotspotRadius: number;
 }
 
-export type QuestionConfig = SliderConfig | PinAnswerConfig | null;
+export interface MediaClipConfig {
+  mediaUrl: string;
+  songTitle?: string;
+  songArtist?: string;
+  artistPoints?: number;
+  videoTitle?: string;
+}
+
+export type QuestionConfig = SliderConfig | PinAnswerConfig | MediaClipConfig | null;
 
 export type BrainstormStatus = "proposed" | "shortlisted" | "added";
 
@@ -101,6 +111,7 @@ export interface SessionPlayer {
   id: string;
   session_id: string;
   display_name: string;
+  avatar_emoji: string;
   score: number;
   joined_at: number;
 }
@@ -128,8 +139,11 @@ export interface QuestionPayload {
   imageUrl: string | null;
   type: QuestionType;
   answerOptions: { id: string; text: string }[];
-  /** Only present for slider questions – excludes correct value */
   sliderConfig?: { min: number; max: number; step: number };
+  /** For audioclip / videoclip */
+  mediaUrl?: string;
+  hasArtist?: boolean;
+  artistPoints?: number;
 }
 
 // ─── WebSocket message protocol (client side) ─────────────────────────────────
@@ -141,6 +155,10 @@ export type ServerMessage =
       playerCount: number;
       players?: PlayerSnapshot[];
       currentQuestionIndex: number;
+      /** Restored score for reconnecting player */
+      totalScore?: number;
+      /** Restored leaderboard for reconnecting player in leaderboard/ended phase */
+      leaderboard?: LeaderboardEntry[];
     }
   | { type: "player_joined"; player: PlayerSnapshot }
   | { type: "player_left"; playerId: string; displayName: string }
@@ -186,6 +204,7 @@ export type ClientMessage =
       questionId: string;
       answerIds?: string[];
       answerText?: string;
+      answerText2?: string;  // audioclip artist (bonus)
       sliderValue?: number;
       pinCoords?: { x: number; y: number };
       clientTimestamp: number;

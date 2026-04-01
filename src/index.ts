@@ -47,7 +47,15 @@ app.get("/api/rooms/:code/ws", async (c) => {
 // ─── Global error handler — always return JSON, never leak plain-text 500 ──────
 
 app.onError((err, c) => {
-  console.error(err);
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(JSON.stringify({
+    level: "error",
+    path: c.req.path,
+    method: c.req.method,
+    message,
+    stack: err instanceof Error ? err.stack : undefined,
+    ts: new Date().toISOString(),
+  }));
   return c.json({ success: false, error: "Internal server error" }, 500);
 });
 

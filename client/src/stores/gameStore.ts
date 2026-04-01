@@ -135,9 +135,12 @@ function applyServerMessage(prev: GameState, msg: ServerMessage): Partial<GameSt
           currentQuestionIndex: msg.currentQuestionIndex,
         };
       }
+      // Player: restore score and leaderboard if server sent them (reconnect)
       return {
         phase: msg.phase,
         currentQuestionIndex: msg.currentQuestionIndex,
+        ...(msg.totalScore !== undefined && { totalScore: msg.totalScore }),
+        ...(msg.leaderboard?.length && { leaderboard: msg.leaderboard }),
       };
 
     case "player_joined":

@@ -73,15 +73,115 @@ export function getAvatarColor(id) {
     }
     return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
-/** 40 fun emoji avatars for players to choose from */
-export const AVATARS = [
-    // Animals
-    "🦊", "🐼", "🦁", "🐯", "🐻", "🦝", "🐨", "🐸",
-    "🐧", "🦉", "🦆", "🐙", "🦈", "🦋", "🐬", "🦄",
-    // Food & fun
-    "🍕", "🌮", "🍣", "🧁", "🍦", "🎂", "🍩", "🌈",
-    // Objects
-    "🚀", "🎸", "🎮", "🎯", "🏆", "⚡", "🔮", "🎪",
-    // Faces
-    "😎", "🤩", "🥳", "😈", "🤖", "👾", "🎭", "🤡",
+/** Avatar categories — each uses a different DiceBear style */
+export const AVATAR_CATEGORIES = [
+    {
+        id: "characters",
+        label: "Characters",
+        icon: "🌟",
+        avatars: [
+            "adventurer:Luna", "adventurer:Max", "adventurer:Nova", "adventurer:Pixel",
+            "adventurer:Sage", "adventurer:Storm", "adventurer:Ember", "adventurer:Blaze",
+            "adventurer:Comet", "adventurer:River", "adventurer:Skye", "adventurer:Zara",
+            "adventurer:Indigo", "adventurer:Felix",
+        ],
+    },
+    {
+        id: "animals",
+        label: "Animals",
+        icon: "🐾",
+        avatars: [
+            "🐼", "🦊", "🐸", "🐨",
+            "🐯", "🦁", "🐻", "🐺",
+            "🦋", "🐙", "🦄", "🐲",
+            "🐹", "🐱",
+        ],
+    },
+    {
+        id: "robots",
+        label: "Robots",
+        icon: "🤖",
+        avatars: [
+            "bottts:Aneka", "bottts:Atlas", "bottts:Cosmo", "bottts:Dusk",
+            "bottts:Echo", "bottts:Felix", "bottts:Frost", "bottts:Mochi",
+            "bottts:Nova", "bottts:Orion", "bottts:Qubit", "bottts:Spark",
+            "bottts:Titan", "bottts:Vega",
+        ],
+    },
+    {
+        id: "pixel",
+        label: "Pixel Art",
+        icon: "👾",
+        avatars: [
+            "pixel-art:Rio", "pixel-art:Ace", "pixel-art:Tide", "pixel-art:Zara",
+            "pixel-art:Zen", "pixel-art:Swift", "pixel-art:Neon", "pixel-art:Spark",
+            "pixel-art:Blaze", "pixel-art:Comet", "pixel-art:Luna", "pixel-art:Max",
+            "pixel-art:Nova", "pixel-art:Storm",
+        ],
+    },
+    {
+        id: "fashion",
+        label: "Hats & Caps",
+        icon: "🎩",
+        avatars: [
+            "avataaars:Pixel", "avataaars:Luna", "avataaars:Max", "avataaars:Sage",
+            "avataaars:Nova", "avataaars:Ember", "avataaars:Storm", "avataaars:Blaze",
+            "avataaars:Comet", "avataaars:Tide", "avataaars:River", "avataaars:Skye",
+            "avataaars:Felix", "avataaars:Mochi",
+        ],
+    },
+    {
+        id: "doodle",
+        label: "Doodle",
+        icon: "✏️",
+        avatars: [
+            "croodles:Aneka", "croodles:Atlas", "croodles:Cosmo", "croodles:Dusk",
+            "croodles:Echo", "croodles:Felix", "croodles:Frost", "croodles:Mochi",
+            "croodles:Nova", "croodles:Orion", "croodles:Spark", "croodles:Titan",
+            "croodles:River", "croodles:Skye",
+        ],
+    },
+    {
+        id: "illustrated",
+        label: "Illustrated",
+        icon: "🎨",
+        avatars: [
+            "micah:Rio", "micah:Ace", "micah:Tide", "micah:Zara",
+            "micah:Zen", "micah:Swift", "micah:Neon", "micah:Spark",
+            "micah:Blaze", "micah:Comet", "micah:Luna", "micah:Max",
+            "micah:Nova", "micah:Storm",
+        ],
+    },
+    {
+        id: "woodland",
+        label: "Woodland",
+        icon: "🌿",
+        avatars: [
+            "lorelei:Acorn", "lorelei:Birch", "lorelei:Cedar", "lorelei:Daisy",
+            "lorelei:Elm", "lorelei:Fern", "lorelei:Grove", "lorelei:Hazel",
+            "lorelei:Ivy", "lorelei:Juniper", "lorelei:Kestrel", "lorelei:Larch",
+            "lorelei:Maple", "lorelei:Nettle",
+        ],
+    },
 ];
+/** Flat list of all avatar IDs across every category */
+export const AVATARS = AVATAR_CATEGORIES.flatMap((c) => [...c.avatars]);
+/**
+ * Build a DiceBear URL.
+ * Accepts "style:seed" (new format) or a bare seed string (legacy adventurer).
+ */
+export function getAvatarUrl(avatar) {
+    const bg = "b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf";
+    if (avatar.includes(":")) {
+        const colon = avatar.indexOf(":");
+        const style = avatar.slice(0, colon);
+        const seed = avatar.slice(colon + 1);
+        return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
+    }
+    // Legacy bare seed → adventurer
+    return `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(avatar)}&backgroundColor=${bg}`;
+}
+/** Returns true for DiceBear seeds (new or legacy) vs legacy emoji chars */
+export function isAvatarSeed(value) {
+    return /^[A-Za-z]/.test(value);
+}

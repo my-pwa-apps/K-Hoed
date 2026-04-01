@@ -2,9 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { hashPassword, verifyPassword, signJwt } from "../lib/auth.js";
-import { getUserByEmail, getUserById, createUser } from "../lib/db.js";
+import { getUserByEmail, getUserById, createUser, checkRateLimitD1 } from "../lib/db.js";
 import { newId } from "../lib/room-code.js";
-import { checkRateLimit } from "../lib/rate-limit.js";
 import { requireAuth } from "../middleware/auth.js";
 import type { Env } from "../worker-env.js";
 
@@ -27,9 +26,9 @@ const registerSchema = z.object({
 });
 
 app.post("/register", zValidator("json", registerSchema, zodHook), async (c) => {
-  // Rate-limit per IP: 5 registrations per minute
+  // Rate-limit per IP: 5 registrations per minute (D1-backed, survives cold starts)
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  if (!checkRateLimit(`register:${ip}`, 5, 60_000)) {
+  if (!await checkRateLimitD1(c.env.DB, `register:${ip}`, 5, 60_000)) {
     return c.json({ success: false, error: "Too many requests" }, 429);
   }
 
@@ -81,7 +80,7 @@ const loginSchema = z.object({
 
 app.post("/login", zValidator("json", loginSchema, zodHook), async (c) => {
   const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
-  if (!checkRateLimit(`login:${ip}`, 10, 60_000)) {
+  if (!await checkRateLimitD1(c.env.DB, `login:${ip}`, 10, 60_000)) {
     return c.json({ success: false, error: "Too many requests" }, 429);
   }
 

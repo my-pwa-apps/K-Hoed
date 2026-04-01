@@ -17,12 +17,30 @@ const BLOCKED = new Set([
   "nigga",
 ]);
 
+/** Collapse consecutive repeated letters: "fuuuck" → "fuck", "shiiit" → "shit" */
+function dedup(s: string): string {
+  return s.replace(/(.)(\1+)/g, "$1");
+}
+
 /** Returns true if the string contains a blocked word. */
 export function containsProfanity(text: string): boolean {
-  const normalised = text.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-  for (const word of normalised.split(/\s+/)) {
-    if (BLOCKED.has(word)) return true;
+  const lower = text.toLowerCase();
+
+  // 1. Whole-word check (handles normal usage and punctuation-separated like f.u.c.k)
+  const words = lower.replace(/[^a-z0-9 ]/g, "").split(/\s+/);
+  for (const word of words) {
+    if (BLOCKED.has(word) || BLOCKED.has(dedup(word))) return true;
   }
+
+  // 2. Strip ALL non-alpha chars (catches "f.u.c.k", "f u c k", "fuuck")
+  const stripped = dedup(lower.replace(/[^a-z]/g, ""));
+  if (BLOCKED.has(stripped)) return true;
+
+  // 3. Substring check on fully stripped+deduped string for short words (≤5 chars)
+  for (const word of BLOCKED) {
+    if (word.length <= 5 && stripped.includes(word)) return true;
+  }
+
   return false;
 }
 

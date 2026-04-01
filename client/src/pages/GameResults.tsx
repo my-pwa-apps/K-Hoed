@@ -4,7 +4,7 @@ import { Trophy, Users, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { gameApi } from "@/lib/api";
-import { getAvatarColor } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 
 export default function GameResults() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -84,12 +84,13 @@ export default function GameResults() {
               <span className="w-7 text-center font-bold text-gray-400 text-sm">
                 {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
               </span>
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${getAvatarColor(player.id)}`}
+              <PlayerAvatar
+                value={player.avatar_emoji}
+                playerId={player.id}
+                name={player.display_name}
+                size="sm"
                 aria-hidden
-              >
-                {player.display_name[0]?.toUpperCase()}
-              </div>
+              />
               <span className="flex-1 font-medium text-gray-800">{player.display_name}</span>
               <span className="font-bold tabular-nums text-gray-900">
                 {player.score.toLocaleString()}

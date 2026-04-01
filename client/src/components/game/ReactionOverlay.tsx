@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useReactionStore } from "@/stores/reactionStore";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 
 /**
  * Floating GIF reactions that bubble up from the bottom of the host screen.
@@ -31,7 +32,7 @@ export function ReactionOverlay() {
             className="flex flex-col items-end gap-1"
           >
             <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white text-xs rounded-full px-2 py-0.5">
-              <span aria-hidden>{r.avatarEmoji}</span>
+              <PlayerAvatar value={r.avatarEmoji} name={r.displayName} size="xs" />
               <span className="font-semibold max-w-[80px] truncate">{r.displayName}</span>
             </div>
             <img

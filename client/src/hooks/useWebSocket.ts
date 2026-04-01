@@ -6,7 +6,7 @@ interface UseWebSocketOptions {
   roomCode: string;
   role: "host" | "player";
   sessionId: string;
-  token?: string;
+  ticket?: string;      // C1: host uses short-lived ticket
   displayName?: string;
   playerId?: string;
   avatarEmoji?: string;
@@ -18,7 +18,7 @@ export function useGameWebSocket({
   roomCode,
   role,
   sessionId,
-  token,
+  ticket,
   displayName,
   playerId,
   avatarEmoji,
@@ -32,12 +32,12 @@ export function useGameWebSocket({
     () =>
       buildWsUrl(roomCode, role, {
         sessionId,
-        token,
+        ticket,
         displayName,
         playerId,
         avatarEmoji,
       }),
-    [roomCode, role, sessionId, token, displayName, playerId, avatarEmoji],
+    [roomCode, role, sessionId, ticket, displayName, playerId, avatarEmoji],
   );
 
   useEffect(() => {

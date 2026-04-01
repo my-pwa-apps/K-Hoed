@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, TrendingUp, Minus, TrendingDown } from "lucide-react";
-import { cn, getAvatarColor } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import type { LeaderboardEntry } from "@/lib/types";
 
 interface LeaderboardProps {
@@ -47,15 +48,13 @@ export function Leaderboard({
             </div>
 
             {/* Avatar */}
-            <div
-              className={cn(
-                "w-9 h-9 rounded-full flex items-center justify-center text-xl shrink-0",
-                entry.avatarEmoji ? "" : getAvatarColor(entry.playerId),
-              )}
+            <PlayerAvatar
+              value={entry.avatarEmoji ?? ""}
+              playerId={entry.playerId}
+              name={entry.displayName}
+              size="md"
               aria-hidden
-            >
-              {entry.avatarEmoji ?? entry.displayName[0]?.toUpperCase()}
-            </div>
+            />
 
             {/* Name */}
             <span className="flex-1 truncate text-sm font-semibold">{entry.displayName}</span>
@@ -132,14 +131,12 @@ export function Podium({ entries }: { entries: LeaderboardEntry[] }) {
             transition={{ delay: entry.rank * 0.15, type: "spring", stiffness: 200 }}
             className="flex flex-col items-center gap-2"
           >
-            <div
-              className={cn(
-                "w-12 h-12 rounded-full flex items-center justify-center text-2xl",
-                entry.avatarEmoji ? "" : getAvatarColor(entry.playerId),
-              )}
-            >
-              {entry.avatarEmoji ?? entry.displayName[0]?.toUpperCase()}
-            </div>
+            <PlayerAvatar
+              value={entry.avatarEmoji ?? ""}
+              playerId={entry.playerId}
+              name={entry.displayName}
+              size="lg"
+            />
             <span className="text-sm font-semibold text-gray-800 text-center max-w-[80px] truncate">
               {entry.displayName}
             </span>

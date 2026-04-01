@@ -1,20 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, Copy, Play, Check } from "lucide-react";
+import { Users, Play } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useGameStore, initHostGame } from "@/stores/gameStore";
 import { useHostGame } from "@/hooks/useGame";
-import { useAuthStore } from "@/stores/authStore";
 import { gameApi } from "@/lib/api";
 import { useI18n, plural } from "@/i18n";
-import { getAvatarColor } from "@/lib/utils";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { JoinPanel } from "@/components/game/JoinPanel";
 
 export default function HostLobby() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
-  const token = useAuthStore((s) => s.token)!;
+  const navigate = useNavigate();;
 
   const { data: _session } = useQuery({
     queryKey: ["session", sessionId],
@@ -44,10 +43,8 @@ export default function HostLobby() {
   const { status, send } = useHostGame({
     sessionId: sessionId!,
     roomCode,
-    token,
   });
   const { t } = useI18n();
-  const [copied, setCopied] = useState(false);
 
   const players = store.role === "host" ? store.players : [];
   void store.phase;
@@ -58,12 +55,6 @@ export default function HostLobby() {
     navigate(`/host/${sessionId}/game`);
   };
 
-  const copyCode = () => {
-    void navigator.clipboard.writeText(roomCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   if (!roomCode) {
     return <div className="text-center py-20 text-white/40">{t.common.loading}</div>;
   }
@@ -71,25 +62,8 @@ export default function HostLobby() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-900 to-brand-700 flex flex-col items-center py-12 px-4">
       <div className="w-full max-w-2xl space-y-6">
-        {/* Room code */}
-        <div className="text-center">
-          <p className="text-white/70 text-sm font-medium mb-1">{t.lobby.share_hint}</p>
-          <p className="text-white font-medium text-lg mb-2">
-            {location.origin}/join
-          </p>
-          <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur rounded-3xl px-8 py-4">
-            <span className="font-display font-extrabold text-5xl text-white tracking-widest">
-              {roomCode}
-            </span>
-            <button
-              onClick={copyCode}
-              aria-label={t.lobby.copy_code}
-              className="p-2 rounded-xl bg-white/20 text-white hover:bg-white/30 transition"
-            >
-              {copied ? <Check size={20} aria-hidden /> : <Copy size={20} aria-hidden />}
-            </button>
-          </div>
-        </div>
+        {/* Join panel — QR code + tinyurl + room code */}
+        <JoinPanel roomCode={roomCode} dark />
 
         {/* Player list */}
         <div className="bg-white/10 backdrop-blur rounded-3xl p-6">
@@ -119,12 +93,12 @@ export default function HostLobby() {
                   exit={{ opacity: 0, scale: 0.6 }}
                   className="flex items-center gap-2 bg-white/15 rounded-xl px-3 py-2"
                 >
-                  <div
-                    className={`w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${p.avatarEmoji ? "" : getAvatarColor(p.id)} text-white`}
-                    aria-hidden
-                  >
-                    {p.avatarEmoji ?? p.displayName[0]?.toUpperCase()}
-                  </div>
+                  <PlayerAvatar
+                    value={p.avatarEmoji ?? ""}
+                    playerId={p.id}
+                    name={p.displayName}
+                    size="sm"
+                  />
                   <span className="text-white text-sm font-medium truncate">{p.displayName}</span>
                 </motion.div>
               ))}

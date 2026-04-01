@@ -1,6 +1,5 @@
 import type { DurableObject } from "@cloudflare/workers-types";
-import { verifyJwt } from "../lib/auth.js";
-import { calculateScore, evaluateAnswer, evaluateTypeanswer, evaluateSlider, evaluatePuzzle, evaluatePinanswer, buildLeaderboard } from "../lib/scoring.js";
+import { calculateScore, evaluateAnswer, evaluateTypeanswer, evaluateSlider, evaluatePuzzle, evaluatePinanswer, evaluateAudioClip, evaluateVideoClip, buildLeaderboard } from "../lib/scoring.js";
 import { containsProfanity } from "../lib/profanity.js";
 import { newId } from "../lib/room-code.js";
 import {
@@ -10,6 +9,7 @@ import {
   upsertSessionPlayer,
   updatePlayerScore,
   recordSubmission,
+  consumeWsTicket,
 } from "../lib/db.js";
 import type { Env } from "../worker-env.js";
 import type {
@@ -83,16 +83,17 @@ export class GameRoom implements DurableObject {
     const url = new URL(request.url);
     const role = url.searchParams.get("role"); // "host" | "player"
     const sessionId = url.searchParams.get("sessionId") ?? "";
-    const authToken = url.searchParams.get("token") ?? "";
+    const ticket = url.searchParams.get("ticket") ?? ""; // C1: ticket, not raw JWT
     const displayName = (url.searchParams.get("displayName") ?? "").trim();
     const playerId = url.searchParams.get("playerId") ?? "";
-    const avatarEmoji = decodeURIComponent(url.searchParams.get("avatarEmoji") ?? "😀");
+    // C2: truncate avatarEmoji to prevent oversized URL params
+    const avatarEmoji = decodeURIComponent(url.searchParams.get("avatarEmoji") ?? "😀").slice(0, 100);
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
 
     if (role === "host") {
-      const ok = await this.acceptHost(server, sessionId, authToken);
+      const ok = await this.acceptHost(server, sessionId, ticket);
       if (!ok) {
         server.close(4001, "Unauthorised");
         return new Response(null, { status: 101, webSocket: client });
@@ -176,13 +177,14 @@ export class GameRoom implements DurableObject {
   private async acceptHost(
     ws: WebSocket,
     sessionId: string,
-    authToken: string,
+    ticket: string,
   ): Promise<boolean> {
-    const payload = await verifyJwt(authToken, this.env.JWT_SECRET);
-    if (!payload) return false;
+    // C1: validate a short-lived D1 ticket instead of a raw JWT in the URL
+    const ticketRow = await consumeWsTicket(this.env.DB, ticket);
+    if (!ticketRow || ticketRow.session_id !== sessionId) return false;
 
     const session = await getSessionById(this.env.DB, sessionId);
-    if (!session || session.host_id !== payload.sub) return false;
+    if (!session || session.host_id !== ticketRow.host_id) return false;
     if (session.status === "ended") return false;
 
     // Close any existing host ws
@@ -239,28 +241,49 @@ export class GameRoom implements DurableObject {
     if (!session || session.id !== this.sessionId) return false;
     if (session.status === "ended") return false;
 
-    // Sanitise display name
     const safeName = containsProfanity(displayName) ? "Player" : displayName;
 
-    let playerId: string;
     const existing = existingPlayerId ? this.players.get(existingPlayerId) : null;
+    let playerId: string;
+    let isReconnect = false;
 
     if (existing) {
-      // Reconnect: check window
-      const elapsed = existing.disconnectedAt
-        ? Date.now() - existing.disconnectedAt
-        : 0;
-      if (elapsed > SCORING.RECONNECT_WINDOW_MS && !existing.connected) {
-        // Too late to reconnect with the same identity, assign new id
+      const elapsed = existing.disconnectedAt ? Date.now() - existing.disconnectedAt : 0;
+
+      if (!existing.connected && elapsed > SCORING.RECONNECT_WINDOW_MS) {
+        // Reconnect window expired — treat as a brand-new player
+        if (this.phase !== "lobby") {
+          ws.close(4003, "Game already in progress");
+          return false;
+        }
         playerId = newId();
+        this.players.set(playerId, {
+          id: playerId,
+          displayName: safeName,
+          avatarEmoji: avatarEmoji || "😀",
+          score: 0,
+          connected: true,
+          disconnectedAt: null,
+        });
+        await upsertSessionPlayer(this.env.DB, {
+          id: playerId,
+          session_id: sessionId,
+          display_name: safeName,
+          avatar_emoji: avatarEmoji || "😀",
+        });
+        this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, avatarEmoji: avatarEmoji || "😀", score: 0, connected: true } });
       } else {
+        // Valid reconnect within window
         playerId = existingPlayerId;
         existing.connected = true;
         existing.disconnectedAt = null;
+        isReconnect = true;
+        await this.persistPlayers();
+        // Notify host that player is back
+        this.broadcastTo("host", { type: "player_joined", player: { id: playerId, displayName: existing.displayName, avatarEmoji: existing.avatarEmoji, score: existing.score, connected: true } });
       }
     } else {
       if (this.phase !== "lobby") {
-        // Don't allow new joins mid-game
         ws.close(4003, "Game already in progress");
         return false;
       }
@@ -273,27 +296,53 @@ export class GameRoom implements DurableObject {
         connected: true,
         disconnectedAt: null,
       });
-
       await upsertSessionPlayer(this.env.DB, {
         id: playerId,
         session_id: sessionId,
         display_name: safeName,
+        avatar_emoji: avatarEmoji || "😀",
       });
-
       this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, avatarEmoji: avatarEmoji || "😀", score: 0, connected: true } });
     }
 
     this.state.acceptWebSocket(ws, ["player", `player:${playerId}`]);
 
-    // Send current state to the joining/reconnecting player
+    const player = this.players.get(playerId);
+
+    // Build reconnect extras: restore score, and leaderboard if visible
+    const reconnectLeaderboard =
+      isReconnect && (this.phase === "leaderboard" || this.phase === "ended")
+        ? buildLeaderboard([...this.players.values()], this.prevScores)
+        : undefined;
+
     this.sendTo(ws, {
       type: "room_state",
       phase: this.phase,
       playerCount: this.players.size,
       currentQuestionIndex: this.currentQuestionIndex,
+      ...(isReconnect && player && { totalScore: player.score }),
+      ...(reconnectLeaderboard && { leaderboard: reconnectLeaderboard }),
     });
 
-    if (this.phase === "question" && this.currentQuestionIndex >= 0) {
+    // If reconnecting during an active question, resend the question
+    if (isReconnect && this.phase === "question" && this.currentQuestionIndex >= 0) {
+      const q = this.questions[this.currentQuestionIndex]!;
+      this.sendTo(ws, {
+        type: "question_start",
+        question: this.buildQuestionPayload(q),
+        questionIndex: this.currentQuestionIndex,
+        totalQuestions: this.questions.length,
+        startTime: this.questionStartTime,
+        timeLimit: q.time_limit,
+      });
+    }
+
+    // If reconnecting during ended phase, resend the final results
+    if (isReconnect && this.phase === "ended" && reconnectLeaderboard) {
+      this.sendTo(ws, { type: "game_ended", finalLeaderboard: reconnectLeaderboard });
+    }
+
+    if (!isReconnect && this.phase === "question" && this.currentQuestionIndex >= 0) {
       const q = this.questions[this.currentQuestionIndex]!;
       this.sendTo(ws, {
         type: "question_start",
@@ -460,6 +509,62 @@ export class GameRoom implements DurableObject {
           isCorrect = evaluatePinanswer(msg.pinCoords, question.config as PinAnswerConfig);
         }
         break;
+      case "audioclip": {
+        answerText = (msg.answerText ?? "").trim();
+        if (question.config) {
+          const cfg = question.config as import("../types/index.js").MediaClipConfig;
+          const result = evaluateAudioClip(answerText, msg.answerText2?.trim(), cfg);
+          isCorrect = result.isCorrect;
+          // bonusPoints applied after base points calculation below
+          const responseMs2 = Math.min(serverResponseMs, timeLimitMs);
+          const basePoints = calculateScore(question.points, question.time_limit, responseMs2, isCorrect);
+          const totalPoints = basePoints + result.bonusPoints;
+          const player2 = this.players.get(playerId);
+          if (player2) player2.score += totalPoints;
+          const submission2: SubmissionInMemory = {
+            playerId,
+            answerIds: [],
+            answerText,
+            responseTimeMs: responseMs2,
+            isCorrect,
+            pointsEarned: totalPoints,
+          };
+          qSubmissions.push(submission2);
+          this.submissions.set(question.id, qSubmissions);
+          void recordSubmission(this.env.DB, {
+            id: newId(),
+            session_id: this.sessionId,
+            player_id: playerId,
+            question_id: question.id,
+            answer_option_ids: JSON.stringify([answerText, msg.answerText2 ?? ""]),
+            is_correct: isCorrect ? 1 : 0,
+            points_earned: totalPoints,
+            response_time_ms: responseMs2,
+          });
+          this.sendTo(ws, {
+            type: "answer_result",
+            correct: isCorrect,
+            pointsEarned: totalPoints,
+            totalScore: player2?.score ?? 0,
+          });
+          this.broadcastTo("host", { type: "answer_received", answerCount: qSubmissions.length, totalPlayers: this.players.size });
+          if (qSubmissions.length >= this.players.size) {
+            await this.state.storage.deleteAlarm();
+            await this.endCurrentQuestion();
+          }
+          await this.persistPlayers();
+          return;
+        }
+        break;
+      }
+      case "videoclip": {
+        answerText = (msg.answerText ?? "").trim();
+        if (question.config) {
+          const cfg = question.config as import("../types/index.js").MediaClipConfig;
+          isCorrect = evaluateVideoClip(answerText, cfg);
+        }
+        break;
+      }
     }
     const responseMs = Math.min(serverResponseMs, timeLimitMs);
     const points = calculateScore(question.points, question.time_limit, responseMs, isCorrect);
@@ -576,7 +681,7 @@ export class GameRoom implements DurableObject {
           if (aid in distribution) distribution[aid]!++;
         }
       }
-    } else if (q.type === "typeanswer") {
+    } else if (q.type === "typeanswer" || q.type === "audioclip" || q.type === "videoclip") {
       for (const sub of submissions) {
         if (sub.answerText) {
           const key = sub.answerText.trim().toLowerCase();
@@ -606,6 +711,21 @@ export class GameRoom implements DurableObject {
       revealData = {
         type: "typeanswer",
         correctTexts: q.answer_options.filter((a) => a.is_correct).map((a) => a.text),
+      };
+    } else if (q.type === "audioclip" && q.config) {
+      const cfg = q.config as import("../types/index.js").MediaClipConfig;
+      revealData = {
+        type: "audioclip",
+        correctTexts: [
+          ...(cfg.songTitle ? [cfg.songTitle] : []),
+          ...(cfg.songArtist ? [`Artist: ${cfg.songArtist}`] : []),
+        ],
+      };
+    } else if (q.type === "videoclip" && q.config) {
+      const cfg = q.config as import("../types/index.js").MediaClipConfig;
+      revealData = {
+        type: "videoclip",
+        correctTexts: [cfg.videoTitle ?? cfg.songTitle ?? ""].filter(Boolean),
       };
     } else if (q.type === "slider" && q.config) {
       const cfg = q.config as SliderConfig;
@@ -729,6 +849,16 @@ export class GameRoom implements DurableObject {
     if (q.type === "slider" && q.config) {
       const cfg = q.config as SliderConfig;
       payload.sliderConfig = { min: cfg.min, max: cfg.max, step: cfg.step };
+    }
+
+    // Include media URL for audioclip / videoclip (no correct answer in payload)
+    if ((q.type === "audioclip" || q.type === "videoclip") && q.config) {
+      const cfg = q.config as import("../types/index.js").MediaClipConfig;
+      payload.mediaUrl = cfg.mediaUrl;
+      if (q.type === "audioclip") {
+        payload.hasArtist = !!(cfg.songArtist);
+        payload.artistPoints = cfg.artistPoints ?? 500;
+      }
     }
 
     return payload;

@@ -158,7 +158,7 @@ export function buildWsUrl(
   role: "host" | "player",
   params: {
     sessionId: string;
-    token?: string;
+    ticket?: string;   // C1: host uses a short-lived ticket instead of raw JWT
     displayName?: string;
     playerId?: string;
     avatarEmoji?: string;
@@ -169,7 +169,7 @@ export function buildWsUrl(
   const url = new URL(`${protocol}//${host}/api/rooms/${roomCode}/ws`);
   url.searchParams.set("role", role);
   url.searchParams.set("sessionId", params.sessionId);
-  if (params.token) url.searchParams.set("token", params.token);
+  if (params.ticket) url.searchParams.set("ticket", params.ticket);
   if (params.displayName) url.searchParams.set("displayName", params.displayName);
   if (params.playerId) url.searchParams.set("playerId", params.playerId);
   if (params.avatarEmoji) url.searchParams.set("avatarEmoji", encodeURIComponent(params.avatarEmoji));
