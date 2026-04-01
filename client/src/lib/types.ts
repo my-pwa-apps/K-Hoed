@@ -79,6 +79,7 @@ export interface Quiz {
   owner_id: string;
   is_public: boolean;
   brainstorm?: BrainstormItem[];
+  brainstorm_token?: string | null;
   created_at: number;
   updated_at: number;
   question_count?: number;

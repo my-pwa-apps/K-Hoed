@@ -4,6 +4,7 @@ import { authRoutes } from "./routes/auth.js";
 import { quizRoutes } from "./routes/quizzes.js";
 import { gameRoutes } from "./routes/games.js";
 import { uploadRoutes } from "./routes/upload.js";
+import { brainstormRoutes } from "./routes/brainstorm.js";
 import type { Env } from "./worker-env.js";
 
 // Re-export Durable Object class
@@ -32,6 +33,7 @@ app.route("/api/auth", authRoutes);
 app.route("/api/quizzes", quizRoutes);
 app.route("/api/games", gameRoutes);
 app.route("/api/upload", uploadRoutes);
+app.route("/api/brainstorm", brainstormRoutes);
 
 // ─── WebSocket — delegate to Durable Object ───────────────────────────────────
 
@@ -40,6 +42,13 @@ app.get("/api/rooms/:code/ws", async (c) => {
   const id = c.env.GAME_ROOM.idFromName(code);
   const stub = c.env.GAME_ROOM.get(id);
   return stub.fetch(c.req.raw);
+});
+
+// ─── Global error handler — always return JSON, never leak plain-text 500 ──────
+
+app.onError((err, c) => {
+  console.error(err);
+  return c.json({ success: false, error: "Internal server error" }, 500);
 });
 
 // ─── Health check ─────────────────────────────────────────────────────────────

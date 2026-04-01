@@ -1,12 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload, Lightbulb, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload, Lightbulb, ArrowRight, CheckCircle2, Link2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { quizApi, uploadApi } from "@/lib/api";
+import { quizApi, uploadApi, brainstormApi } from "@/lib/api";
 import { newLocalId } from "@/pages/QuizEditor.utils";
 function createDraftQuestion(orderIndex, text = "") {
     return {
@@ -48,6 +48,10 @@ export default function QuizEditor() {
     const [questions, setQuestions] = useState([]);
     const [brainstorm, setBrainstorm] = useState([]);
     const [saveError, setSaveError] = useState(null);
+    // Brainstorm collab state
+    const [inviteCopied, setInviteCopied] = useState(false);
+    const [inviteWorking, setInviteWorking] = useState(false);
+    const pollRef = useRef(null);
     // Load existing quiz
     const { isLoading } = useQuery({
         queryKey: ["quiz", id],
@@ -60,6 +64,50 @@ export default function QuizEditor() {
         queryFn: () => quizApi.get(id),
         enabled: !isNew,
     });
+    // Poll brainstorm items from DB to pick up collaborator additions
+    const pollBrainstorm = async () => {
+        if (!id)
+            return;
+        try {
+            const quiz = await quizApi.get(id);
+            const remote = quiz.brainstorm ?? [];
+            setBrainstorm((local) => {
+                const localIds = new Set(local.map((i) => i.id));
+                const newItems = remote.filter((i) => !localIds.has(i.id));
+                return newItems.length > 0 ? [...local, ...newItems] : local;
+            });
+        }
+        catch {
+            // silent — don't disrupt editor on poll failure
+        }
+    };
+    useEffect(() => {
+        if (!id)
+            return;
+        pollRef.current = setInterval(pollBrainstorm, 10_000);
+        return () => {
+            if (pollRef.current)
+                clearInterval(pollRef.current);
+        };
+    }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+    const handleCopyInviteLink = async () => {
+        if (!id)
+            return;
+        setInviteWorking(true);
+        try {
+            const { token } = await brainstormApi.getInvite(id);
+            const url = `${window.location.origin}/brainstorm/${token}`;
+            await navigator.clipboard.writeText(url);
+            setInviteCopied(true);
+            setTimeout(() => setInviteCopied(false), 3000);
+        }
+        catch {
+            // ignore clipboard errors
+        }
+        finally {
+            setInviteWorking(false);
+        }
+    };
     useEffect(() => {
         if (existing) {
             setTitle(existing.title);
@@ -227,7 +275,7 @@ export default function QuizEditor() {
     if (!isNew && isLoading) {
         return _jsx("div", { className: "text-gray-400 text-center py-20", children: "Loading quiz\u2026" });
     }
-    return (_jsxs("div", { className: "max-w-3xl mx-auto space-y-6", children: [_jsxs("div", { className: "flex items-center justify-between flex-wrap gap-3", children: [_jsx("h1", { className: "text-2xl font-display font-bold text-gray-900", children: isNew ? "New quiz" : "Edit quiz" }), _jsxs("div", { className: "flex gap-3", children: [_jsx(Button, { variant: "ghost", onClick: () => navigate("/quizzes"), children: "Cancel" }), _jsx(Button, { onClick: () => saveMutation.mutate(), loading: saveMutation.isPending, disabled: !title.trim(), children: isNew ? "Create quiz" : "Save changes" })] })] }), saveError && (_jsx("p", { role: "alert", className: "text-sm text-danger-500", children: saveError })), _jsx(Card, { children: _jsxs("div", { className: "space-y-4", children: [_jsx(Input, { label: "Quiz title", required: true, placeholder: "e.g. General Knowledge Round", value: title, onChange: (e) => setTitle(e.target.value) }), _jsx(Textarea, { label: "Description (optional)", placeholder: "A short description of the quiz", value: description, onChange: (e) => setDescription(e.target.value) }), _jsxs("label", { className: "flex items-center gap-3 cursor-pointer", children: [_jsx("input", { type: "checkbox", checked: isPublic, onChange: (e) => setIsPublic(e.target.checked), className: "w-4 h-4 accent-brand-500" }), _jsx("span", { className: "text-sm font-medium text-gray-700", children: "Make quiz publicly discoverable" })] })] }) }), _jsx(Card, { className: "border border-amber-200 bg-gradient-to-br from-amber-50 to-white", children: _jsxs("div", { className: "space-y-5", children: [_jsxs("div", { className: "flex items-start justify-between gap-4 flex-wrap", children: [_jsxs("div", { children: [_jsxs("div", { className: "flex items-center gap-2 text-amber-700 mb-1", children: [_jsx(Lightbulb, { size: 18 }), _jsx("h2", { className: "font-display font-bold text-xl text-gray-900", children: "Brainstorm area" })] }), _jsx("p", { className: "text-sm text-gray-600 max-w-2xl", children: "Park ideas here before they become real quiz questions. Shortlist the strongest ones, then move them into the game when you are ready." })] }), _jsxs("div", { className: "flex flex-wrap gap-2 text-xs font-semibold", children: [_jsxs("span", { className: "px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600", children: [brainstormCounts.proposed, " proposed"] }), _jsxs("span", { className: "px-2.5 py-1 rounded-full bg-amber-100 text-amber-800", children: [brainstormCounts.shortlisted, " shortlisted"] }), _jsxs("span", { className: "px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700", children: [brainstormCounts.added, " added to quiz"] })] })] }), brainstorm.length === 0 ? (_jsx("div", { className: "rounded-2xl border border-dashed border-amber-300 bg-white/70 p-6 text-center text-sm text-gray-500", children: "No ideas yet. Start capturing rough question prompts, funny twists, or topics to agree on later." })) : (_jsx("div", { className: "space-y-4", children: brainstorm.map((item, index) => (_jsxs("div", { className: "rounded-2xl border border-amber-200 bg-white p-4 space-y-3 shadow-sm", children: [_jsxs("div", { className: "flex items-start justify-between gap-3 flex-wrap", children: [_jsxs("div", { className: "flex items-center gap-2 text-sm font-semibold text-gray-500", children: [_jsx("span", { className: "w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center", children: index + 1 }), "Idea"] }), _jsxs("div", { className: "flex items-center gap-2 flex-wrap", children: [_jsxs("select", { className: "input py-2 text-sm min-w-[150px]", value: item.status, onChange: (e) => updateBrainstormItem(index, { status: e.target.value }), "aria-label": `Brainstorm status ${index + 1}`, children: [_jsx("option", { value: "proposed", children: "Proposed" }), _jsx("option", { value: "shortlisted", children: "Shortlisted" }), _jsx("option", { value: "added", children: "Added to quiz" })] }), _jsxs(Button, { type: "button", variant: item.status === "added" ? "secondary" : "outline", size: "sm", onClick: () => convertIdeaToQuestion(index), disabled: !item.text.trim(), children: [item.status === "added" ? _jsx(CheckCircle2, { size: 14 }) : _jsx(ArrowRight, { size: 14 }), item.status === "added" ? "Question created" : "Turn into question"] }), _jsx(Button, { type: "button", variant: "ghost", size: "sm", className: "text-danger-500 hover:text-danger-700 hover:bg-danger-50", onClick: () => removeBrainstormItem(index), children: _jsx(Trash2, { size: 14 }) })] })] }), _jsx(Input, { label: "Idea", placeholder: "e.g. Should we do a round about weird Dutch traditions?", value: item.text, onChange: (e) => updateBrainstormItem(index, { text: e.target.value }) }), _jsxs("div", { className: "grid sm:grid-cols-[minmax(0,1fr)_180px] gap-3", children: [_jsx(Textarea, { label: "Notes", placeholder: "Add angle, possible answers, jokes, or concerns to discuss later", value: item.notes ?? "", onChange: (e) => updateBrainstormItem(index, { notes: e.target.value || null }) }), _jsx(Input, { label: "Suggested by", placeholder: "Name", value: item.suggested_by ?? "", onChange: (e) => updateBrainstormItem(index, { suggested_by: e.target.value || null }) })] })] }, item.id))) })), _jsxs(Button, { type: "button", variant: "outline", onClick: addBrainstormItemRow, children: [_jsx(Plus, { size: 16 }), " Add brainstorm idea"] })] }) }), _jsxs("div", { className: "space-y-4", children: [questions.map((q, qi) => (_jsx(QuestionCard, { question: q, index: qi, onUpdate: (patch) => updateQuestion(qi, patch), onRemove: () => removeQuestion(qi), onUpdateAnswer: (ai, patch) => updateAnswer(qi, ai, patch), onAddAnswer: () => addAnswer(qi), onRemoveAnswer: (ai) => removeAnswer(qi, ai), onSetCorrect: (ai) => setCorrectAnswer(qi, ai, q.type === "multiple"), onChangeType: (type) => changeType(qi, type) }, q.id))), _jsxs("button", { onClick: addQuestion, className: "w-full border-2 border-dashed border-gray-300 rounded-2xl p-6\r\n                     text-gray-400 hover:text-brand-600 hover:border-brand-400 transition-colors\r\n                     flex items-center justify-center gap-2 font-medium", children: [_jsx(Plus, { size: 20 }), " Add question"] })] })] }));
+    return (_jsxs("div", { className: "max-w-3xl mx-auto space-y-6", children: [_jsxs("div", { className: "flex items-center justify-between flex-wrap gap-3", children: [_jsx("h1", { className: "text-2xl font-display font-bold text-gray-900", children: isNew ? "New quiz" : "Edit quiz" }), _jsxs("div", { className: "flex gap-3", children: [_jsx(Button, { variant: "ghost", onClick: () => navigate("/quizzes"), children: "Cancel" }), _jsx(Button, { onClick: () => saveMutation.mutate(), loading: saveMutation.isPending, disabled: !title.trim(), children: isNew ? "Create quiz" : "Save changes" })] })] }), saveError && (_jsx("p", { role: "alert", className: "text-sm text-danger-500", children: saveError })), _jsx(Card, { children: _jsxs("div", { className: "space-y-4", children: [_jsx(Input, { label: "Quiz title", required: true, placeholder: "e.g. General Knowledge Round", value: title, onChange: (e) => setTitle(e.target.value) }), _jsx(Textarea, { label: "Description (optional)", placeholder: "A short description of the quiz", value: description, onChange: (e) => setDescription(e.target.value) }), _jsxs("label", { className: "flex items-center gap-3 cursor-pointer", children: [_jsx("input", { type: "checkbox", checked: isPublic, onChange: (e) => setIsPublic(e.target.checked), className: "w-4 h-4 accent-brand-500" }), _jsx("span", { className: "text-sm font-medium text-gray-700", children: "Make quiz publicly discoverable" })] })] }) }), _jsx(Card, { className: "border border-amber-200 bg-gradient-to-br from-amber-50 to-white", children: _jsxs("div", { className: "space-y-5", children: [_jsxs("div", { className: "flex items-start justify-between gap-4 flex-wrap", children: [_jsxs("div", { children: [_jsxs("div", { className: "flex items-center gap-2 text-amber-700 mb-1", children: [_jsx(Lightbulb, { size: 18 }), _jsx("h2", { className: "font-display font-bold text-xl text-gray-900", children: "Brainstorm area" })] }), _jsx("p", { className: "text-sm text-gray-600 max-w-2xl", children: "Park ideas here before they become real quiz questions. Shortlist the strongest ones, then move them into the game when you are ready." })] }), _jsxs("div", { className: "flex flex-wrap items-center gap-2", children: [!isNew && (_jsxs(Button, { type: "button", variant: "outline", size: "sm", loading: inviteWorking, onClick: handleCopyInviteLink, title: "Copy a link that anyone can use to add brainstorm ideas \u2014 no account needed", children: [inviteCopied ? _jsx(RefreshCw, { size: 14, className: "text-emerald-600" }) : _jsx(Link2, { size: 14 }), inviteCopied ? "Link copied!" : "Invite to brainstorm"] })), _jsxs("div", { className: "flex flex-wrap gap-2 text-xs font-semibold", children: [_jsxs("span", { className: "px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600", children: [brainstormCounts.proposed, " proposed"] }), _jsxs("span", { className: "px-2.5 py-1 rounded-full bg-amber-100 text-amber-800", children: [brainstormCounts.shortlisted, " shortlisted"] }), _jsxs("span", { className: "px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700", children: [brainstormCounts.added, " added to quiz"] })] })] })] }), brainstorm.length === 0 ? (_jsx("div", { className: "rounded-2xl border border-dashed border-amber-300 bg-white/70 p-6 text-center text-sm text-gray-500", children: "No ideas yet. Start capturing rough question prompts, funny twists, or topics to agree on later." })) : (_jsx("div", { className: "space-y-4", children: brainstorm.map((item, index) => (_jsxs("div", { className: "rounded-2xl border border-amber-200 bg-white p-4 space-y-3 shadow-sm", children: [_jsxs("div", { className: "flex items-start justify-between gap-3 flex-wrap", children: [_jsxs("div", { className: "flex items-center gap-2 text-sm font-semibold text-gray-500", children: [_jsx("span", { className: "w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center", children: index + 1 }), "Idea", item.suggested_by && (_jsxs("span", { className: "text-xs font-normal text-brand-500 ml-1", children: ["\u00B7 suggested by ", item.suggested_by] }))] }), _jsxs("div", { className: "flex items-center gap-2 flex-wrap", children: [_jsxs("select", { className: "input py-2 text-sm min-w-[150px]", value: item.status, onChange: (e) => updateBrainstormItem(index, { status: e.target.value }), "aria-label": `Brainstorm status ${index + 1}`, children: [_jsx("option", { value: "proposed", children: "Proposed" }), _jsx("option", { value: "shortlisted", children: "Shortlisted" }), _jsx("option", { value: "added", children: "Added to quiz" })] }), _jsxs(Button, { type: "button", variant: item.status === "added" ? "secondary" : "outline", size: "sm", onClick: () => convertIdeaToQuestion(index), disabled: !item.text.trim(), children: [item.status === "added" ? _jsx(CheckCircle2, { size: 14 }) : _jsx(ArrowRight, { size: 14 }), item.status === "added" ? "Question created" : "Turn into question"] }), _jsx(Button, { type: "button", variant: "ghost", size: "sm", className: "text-danger-500 hover:text-danger-700 hover:bg-danger-50", onClick: () => removeBrainstormItem(index), children: _jsx(Trash2, { size: 14 }) })] })] }), _jsx(Input, { label: "Idea", placeholder: "e.g. Should we do a round about weird Dutch traditions?", value: item.text, onChange: (e) => updateBrainstormItem(index, { text: e.target.value }) }), _jsxs("div", { className: "grid sm:grid-cols-[minmax(0,1fr)_180px] gap-3", children: [_jsx(Textarea, { label: "Notes", placeholder: "Add angle, possible answers, jokes, or concerns to discuss later", value: item.notes ?? "", onChange: (e) => updateBrainstormItem(index, { notes: e.target.value || null }) }), _jsx(Input, { label: "Suggested by", placeholder: "Name", value: item.suggested_by ?? "", onChange: (e) => updateBrainstormItem(index, { suggested_by: e.target.value || null }) })] })] }, item.id))) })), _jsxs(Button, { type: "button", variant: "outline", onClick: addBrainstormItemRow, children: [_jsx(Plus, { size: 16 }), " Add brainstorm idea"] })] }) }), _jsxs("div", { className: "space-y-4", children: [questions.map((q, qi) => (_jsx(QuestionCard, { question: q, index: qi, onUpdate: (patch) => updateQuestion(qi, patch), onRemove: () => removeQuestion(qi), onUpdateAnswer: (ai, patch) => updateAnswer(qi, ai, patch), onAddAnswer: () => addAnswer(qi), onRemoveAnswer: (ai) => removeAnswer(qi, ai), onSetCorrect: (ai) => setCorrectAnswer(qi, ai, q.type === "multiple"), onChangeType: (type) => changeType(qi, type) }, q.id))), _jsxs("button", { onClick: addQuestion, className: "w-full border-2 border-dashed border-gray-300 rounded-2xl p-6\r\n                     text-gray-400 hover:text-brand-600 hover:border-brand-400 transition-colors\r\n                     flex items-center justify-center gap-2 font-medium", children: [_jsx(Plus, { size: 20 }), " Add question"] })] })] }));
 }
 function QuestionCard({ question: q, index, onUpdate, onRemove, onUpdateAnswer, onAddAnswer, onRemoveAnswer, onSetCorrect, onChangeType, }) {
     const [uploading, setUploading] = useState(false);

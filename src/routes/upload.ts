@@ -40,6 +40,10 @@ app.post("/", requireAuth, async (c) => {
     return c.json({ success: false, error: "File exceeds 5 MB limit" }, 413);
   }
 
+  if (!c.env.IMAGES) {
+    return c.json({ success: false, error: "Image storage (R2) is not configured on this deployment" }, 503);
+  }
+
   const ext = file.type.split("/")[1]!; // safe: vetted against ALLOWED_MIME
   const key = `quiz-images/${newId()}.${ext}`;
   const buffer = await file.arrayBuffer();

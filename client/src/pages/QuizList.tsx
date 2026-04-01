@@ -61,8 +61,8 @@ export default function QuizList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-display font-bold text-gray-900">My Quizzes</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-2xl sm:text-3xl font-display font-bold text-gray-900">My Quizzes</h1>
         <Link to="/quizzes/new">
           <Button>
             <Plus size={16} /> New quiz

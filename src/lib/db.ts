@@ -173,10 +173,21 @@ export async function createQuiz(
     .run();
 }
 
+export async function getQuizByBrainstormToken(
+  db: D1Database,
+  token: string,
+): Promise<QuizRow | null> {
+  const result = await db
+    .prepare("SELECT * FROM quizzes WHERE brainstorm_token = ?1 LIMIT 1")
+    .bind(token)
+    .all<QuizRow>();
+  return row(result);
+}
+
 export async function updateQuiz(
   db: D1Database,
   id: string,
-  data: Partial<Pick<QuizRow, "title" | "description" | "is_public" | "brainstorm">>,
+  data: Partial<Pick<QuizRow, "title" | "description" | "is_public" | "brainstorm" | "brainstorm_token">>,
 ): Promise<void> {
   const now = Date.now();
   const sets: string[] = ["updated_at = ?1"];
@@ -198,6 +209,10 @@ export async function updateQuiz(
   if (data.brainstorm !== undefined) {
     sets.push(`brainstorm = ?${idx++}`);
     binds.push(data.brainstorm);
+  }
+  if (data.brainstorm_token !== undefined) {
+    sets.push(`brainstorm_token = ?${idx++}`);
+    binds.push(data.brainstorm_token);
   }
 
   binds.push(id);

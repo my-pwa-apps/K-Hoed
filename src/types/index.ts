@@ -71,6 +71,7 @@ export interface QuizRow {
   owner_id: string;
   is_public: number; // 0 | 1 (SQLite bool)
   brainstorm: string | null;
+  brainstorm_token: string | null;
   created_at: number;
   updated_at: number;
 }

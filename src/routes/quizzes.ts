@@ -53,7 +53,11 @@ const brainstormItemSchema = z.object({
 const questionSchema = z.object({
   id: z.string().uuid().optional(),
   text: z.string().min(1).max(1000).trim(),
-  image_url: z.string().url().max(512).nullable().optional(),
+  // Accepts either a normal URL (≤512 chars) or a base64 data URL for inline images
+  image_url: z.union([
+    z.string().url().max(512),
+    z.string().regex(/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/).max(1_000_000),
+  ]).nullable().optional(),
   type: z.enum(["classic", "multiple", "truefalse", "typeanswer", "slider", "puzzle", "pinanswer"]),
   time_limit: z.number().int().min(5).max(120).default(20),
   points: z.number().int().min(100).max(10000).default(1000),

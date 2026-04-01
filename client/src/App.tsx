@@ -16,6 +16,7 @@ import PlayerJoin from "@/pages/PlayerJoin";
 import PlayerGame from "@/pages/PlayerGame";
 import GameResults from "@/pages/GameResults";
 import NotFound from "@/pages/NotFound";
+import BrainstormCollab from "@/pages/BrainstormCollab";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/join/:code" element={<PlayerJoin />} />
         <Route path="/play" element={<PlayerGame />} />
         <Route path="/results/:sessionId" element={<GameResults />} />
+        <Route path="/brainstorm/:token" element={<BrainstormCollab />} />
 
         {/* Protected host routes */}
         <Route element={<RequireAuth><Layout /></RequireAuth>}>

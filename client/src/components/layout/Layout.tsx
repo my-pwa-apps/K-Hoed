@@ -1,4 +1,4 @@
-import { Outlet, Link, useNavigate } from "react-router-dom";
+import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 import { LogOut, LayoutDashboard, BookOpen } from "lucide-react";
 import { LanguagePicker } from "@/components/ui/LanguagePicker";
@@ -25,7 +25,7 @@ export default function Layout() {
             K-Hoed
           </Link>
 
-          {/* Nav */}
+          {/* Nav — desktop only */}
           <nav className="hidden sm:flex items-center gap-1" aria-label="Main navigation">
             <NavLink to="/dashboard" icon={<LayoutDashboard size={16} />}>
               {t.nav.dashboard}
@@ -52,10 +52,20 @@ export default function Layout() {
         </div>
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+      {/* Page content — extra bottom padding on mobile for tab bar */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
         <Outlet />
       </main>
+
+      {/* Bottom tab bar — mobile only */}
+      <nav
+        className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200
+                   flex safe-area-inset-bottom"
+        aria-label="Mobile navigation"
+      >
+        <BottomTab to="/dashboard" icon={<LayoutDashboard size={22} />} label={t.nav.dashboard} />
+        <BottomTab to="/quizzes" icon={<BookOpen size={22} />} label="Quizzes" />
+      </nav>
     </div>
   );
 }
@@ -77,6 +87,31 @@ function NavLink({
     >
       {icon}
       {children}
+    </Link>
+  );
+}
+
+function BottomTab({
+  to,
+  icon,
+  label,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  const location = useLocation();
+  const active = location.pathname === to || location.pathname.startsWith(to + "/");
+  return (
+    <Link
+      to={to}
+      className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-3
+                  text-xs font-semibold transition-colors
+                  ${active ? "text-brand-600" : "text-gray-500 hover:text-brand-500"}`}
+      aria-current={active ? "page" : undefined}
+    >
+      {icon}
+      {label}
     </Link>
   );
 }

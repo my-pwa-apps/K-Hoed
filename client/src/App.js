@@ -16,6 +16,7 @@ import PlayerJoin from "@/pages/PlayerJoin";
 import PlayerGame from "@/pages/PlayerGame";
 import GameResults from "@/pages/GameResults";
 import NotFound from "@/pages/NotFound";
+import BrainstormCollab from "@/pages/BrainstormCollab";
 function RequireAuth({ children }) {
     const token = useAuthStore((s) => s.token);
     const location = useLocation();
@@ -24,5 +25,5 @@ function RequireAuth({ children }) {
     return _jsx(_Fragment, { children: children });
 }
 export default function App() {
-    return (_jsx(ErrorBoundary, { children: _jsx(BrowserRouter, { children: _jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(Landing, {}) }), _jsx(Route, { path: "/login", element: _jsx(Login, {}) }), _jsx(Route, { path: "/register", element: _jsx(Register, {}) }), _jsx(Route, { path: "/join", element: _jsx(PlayerJoin, {}) }), _jsx(Route, { path: "/join/:code", element: _jsx(PlayerJoin, {}) }), _jsx(Route, { path: "/play", element: _jsx(PlayerGame, {}) }), _jsx(Route, { path: "/results/:sessionId", element: _jsx(GameResults, {}) }), _jsxs(Route, { element: _jsx(RequireAuth, { children: _jsx(Layout, {}) }), children: [_jsx(Route, { path: "/dashboard", element: _jsx(Dashboard, {}) }), _jsx(Route, { path: "/quizzes", element: _jsx(QuizList, {}) }), _jsx(Route, { path: "/quizzes/new", element: _jsx(QuizEditor, {}) }), _jsx(Route, { path: "/quizzes/:id/edit", element: _jsx(QuizEditor, {}) }), _jsx(Route, { path: "/host/:sessionId/lobby", element: _jsx(HostLobby, {}) }), _jsx(Route, { path: "/host/:sessionId/game", element: _jsx(HostGame, {}) })] }), _jsx(Route, { path: "*", element: _jsx(NotFound, {}) })] }) }) }));
+    return (_jsx(ErrorBoundary, { children: _jsx(BrowserRouter, { children: _jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(Landing, {}) }), _jsx(Route, { path: "/login", element: _jsx(Login, {}) }), _jsx(Route, { path: "/register", element: _jsx(Register, {}) }), _jsx(Route, { path: "/join", element: _jsx(PlayerJoin, {}) }), _jsx(Route, { path: "/join/:code", element: _jsx(PlayerJoin, {}) }), _jsx(Route, { path: "/play", element: _jsx(PlayerGame, {}) }), _jsx(Route, { path: "/results/:sessionId", element: _jsx(GameResults, {}) }), _jsx(Route, { path: "/brainstorm/:token", element: _jsx(BrainstormCollab, {}) }), _jsxs(Route, { element: _jsx(RequireAuth, { children: _jsx(Layout, {}) }), children: [_jsx(Route, { path: "/dashboard", element: _jsx(Dashboard, {}) }), _jsx(Route, { path: "/quizzes", element: _jsx(QuizList, {}) }), _jsx(Route, { path: "/quizzes/new", element: _jsx(QuizEditor, {}) }), _jsx(Route, { path: "/quizzes/:id/edit", element: _jsx(QuizEditor, {}) }), _jsx(Route, { path: "/host/:sessionId/lobby", element: _jsx(HostLobby, {}) }), _jsx(Route, { path: "/host/:sessionId/game", element: _jsx(HostGame, {}) })] }), _jsx(Route, { path: "*", element: _jsx(NotFound, {}) })] }) }) }));
 }

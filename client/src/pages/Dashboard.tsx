@@ -28,9 +28,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-display font-bold text-gray-900">
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-gray-900">
             {interp(t.dashboard.welcome, { name: user?.display_name?.split(" ")[0] ?? "" })}
           </h1>
           <p className="text-gray-500 mt-1">{t.dashboard.subtitle}</p>

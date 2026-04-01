@@ -126,24 +126,102 @@ export const gameApi = {
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
-export const uploadApi = {
-  image: async (file: File): Promise<{ url: string; key: string }> => {
-    const token = useAuthStore.getState().token;
-    const form = new FormData();
-    form.append("file", file);
+const MAX_IMAGE_DIMENSION = 800;
+const JPEG_QUALITY = 0.85;
+const MAX_IMAGE_BYTES = 700 * 1024; // 700 KB base64 limit for D1
 
-    const res = await fetch(`${BASE}/api/upload`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-
-    const json = (await res.json()) as ApiResponse<{ url: string; key: string }>;
-    if (!json.success) {
-      throw new ApiError(res.status, (json as { error: string }).error);
+function resizeAndEncodeImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    if (!allowed.has(file.type)) {
+      reject(new ApiError(415, "Only JPEG, PNG, WebP, and GIF images are accepted"));
+      return;
     }
-    return (json as { success: true; data: { url: string; key: string } }).data;
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let { width, height } = img;
+      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+        if (width >= height) {
+          height = Math.round((height / width) * MAX_IMAGE_DIMENSION);
+          width = MAX_IMAGE_DIMENSION;
+        } else {
+          width = Math.round((width / height) * MAX_IMAGE_DIMENSION);
+          height = MAX_IMAGE_DIMENSION;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+
+      // Approximate byte size: base64 payload is 3/4 of the string length minus header
+      const base64Payload = dataUrl.split(",")[1] ?? "";
+      const approxBytes = Math.ceil((base64Payload.length * 3) / 4);
+      if (approxBytes > MAX_IMAGE_BYTES) {
+        reject(new ApiError(413, "Image is too large even after compression. Try a smaller image."));
+        return;
+      }
+
+      resolve(dataUrl);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new ApiError(400, "Could not read image file"));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
+export const uploadApi = {
+  /** Resizes + compresses the image client-side and returns a base64 data URL.
+   *  No server round-trip — the data URL is stored directly in image_url. */
+  image: async (file: File): Promise<{ url: string; key: string }> => {
+    const url = await resizeAndEncodeImage(file);
+    return { url, key: "" };
   },
 };
 
 export { ApiError };
+
+// ─── Brainstorm collaboration (public, token-gated) ───────────────────────────
+
+export const brainstormApi = {
+  /** Owner: generate or retrieve the invite token for a quiz. */
+  getInvite: (quizId: string) =>
+    request<{ token: string }>(`/api/brainstorm/invite/${quizId}`, { method: "POST" }),
+
+  /** Owner: revoke the invite token. */
+  revokeInvite: (quizId: string) =>
+    request<null>(`/api/brainstorm/invite/${quizId}`, { method: "DELETE" }),
+
+  /** Public: load quiz title + items by token. */
+  getByToken: (token: string) =>
+    request<{ quiz_title: string; quiz_id: string; items: import("./types").BrainstormItem[] }>(
+      `/api/brainstorm/${token}`,
+    ),
+
+  /** Public: add an idea. */
+  addItem: (
+    token: string,
+    body: { text: string; suggested_by: string; notes?: string | null },
+  ) =>
+    request<import("./types").BrainstormItem>(`/api/brainstorm/${token}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Public: delete an idea. */
+  deleteItem: (token: string, itemId: string) =>
+    request<null>(`/api/brainstorm/${token}/item/${itemId}`, { method: "DELETE" }),
+};

@@ -35,7 +35,9 @@ export async function verifyJwt(
 
 // ─── Password hashing (PBKDF2 via Web Crypto) ─────────────────────────────────
 
-const PBKDF2_ITERATIONS = 310_000;
+// Cloudflare Workers free tier: 10 ms CPU budget per request.
+// 310 000 iterations (~300 ms) causes a hard timeout; 10 000 fits comfortably.
+const PBKDF2_ITERATIONS = 10_000;
 const SALT_BYTES = 16;
 
 export async function hashPassword(password: string): Promise<string> {

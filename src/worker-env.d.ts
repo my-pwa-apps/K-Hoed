@@ -9,8 +9,8 @@ export interface Env {
   /** D1 SQLite database */
   DB: D1Database;
 
-  /** R2 bucket for quiz images */
-  IMAGES: R2Bucket;
+  /** R2 bucket for quiz images (optional — not required when using base64 storage) */
+  IMAGES?: R2Bucket;
 
   /** Static assets binding (built React SPA) */
   ASSETS: Fetcher;

@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload, Lightbulb, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Image, Upload, Lightbulb, ArrowRight, CheckCircle2, Link2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { quizApi, uploadApi } from "@/lib/api";
+import { quizApi, uploadApi, brainstormApi } from "@/lib/api";
 import type { QuestionType, QuestionConfig, SliderConfig, PinAnswerConfig, BrainstormItem, BrainstormStatus } from "@/lib/types";
 import { newLocalId } from "@/pages/QuizEditor.utils";
 
@@ -74,6 +74,11 @@ export default function QuizEditor() {
   const [brainstorm, setBrainstorm] = useState<BrainstormItem[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Brainstorm collab state
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [inviteWorking, setInviteWorking] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Load existing quiz
   const { isLoading } = useQuery({
     queryKey: ["quiz", id],
@@ -87,6 +92,46 @@ export default function QuizEditor() {
     queryFn: () => quizApi.get(id!),
     enabled: !isNew,
   });
+
+  // Poll brainstorm items from DB to pick up collaborator additions
+  const pollBrainstorm = async () => {
+    if (!id) return;
+    try {
+      const quiz = await quizApi.get(id);
+      const remote = quiz.brainstorm ?? [];
+      setBrainstorm((local) => {
+        const localIds = new Set(local.map((i) => i.id));
+        const newItems = remote.filter((i) => !localIds.has(i.id));
+        return newItems.length > 0 ? [...local, ...newItems] : local;
+      });
+    } catch {
+      // silent — don't disrupt editor on poll failure
+    }
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    pollRef.current = setInterval(pollBrainstorm, 10_000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCopyInviteLink = async () => {
+    if (!id) return;
+    setInviteWorking(true);
+    try {
+      const { token } = await brainstormApi.getInvite(id);
+      const url = `${window.location.origin}/brainstorm/${token}`;
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 3000);
+    } catch {
+      // ignore clipboard errors
+    } finally {
+      setInviteWorking(false);
+    }
+  };
 
   useEffect(() => {
     if (existing) {
@@ -346,16 +391,31 @@ export default function QuizEditor() {
                 then move them into the game when you are ready.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold">
-              <span className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600">
-                {brainstormCounts.proposed} proposed
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
-                {brainstormCounts.shortlisted} shortlisted
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                {brainstormCounts.added} added to quiz
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {!isNew && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={inviteWorking}
+                  onClick={handleCopyInviteLink}
+                  title="Copy a link that anyone can use to add brainstorm ideas — no account needed"
+                >
+                  {inviteCopied ? <RefreshCw size={14} className="text-emerald-600" /> : <Link2 size={14} />}
+                  {inviteCopied ? "Link copied!" : "Invite to brainstorm"}
+                </Button>
+              )}
+              <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                <span className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600">
+                  {brainstormCounts.proposed} proposed
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
+                  {brainstormCounts.shortlisted} shortlisted
+                </span>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                  {brainstormCounts.added} added to quiz
+                </span>
+              </div>
             </div>
           </div>
 
@@ -373,6 +433,11 @@ export default function QuizEditor() {
                         {index + 1}
                       </span>
                       Idea
+                      {item.suggested_by && (
+                        <span className="text-xs font-normal text-brand-500 ml-1">
+                          · suggested by {item.suggested_by}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <select

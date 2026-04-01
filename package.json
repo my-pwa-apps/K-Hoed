@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Production Kahoot-style quiz platform on Cloudflare",
-  "workspaces": ["client"],
+  "workspaces": [
+    "client"
+  ],
   "scripts": {
     "dev": "concurrently -n worker,client -c blue,green \"npm run dev:worker\" \"npm run dev:client\"",
     "dev:worker": "wrangler dev --port 8787",
@@ -30,8 +32,8 @@
     "@hono/zod-validator": "^0.3.0",
     "hono": "^4.4.0",
     "jose": "^5.3.0",
-    "zod": "^3.23.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240701.0",
@@ -44,7 +46,7 @@
     "prettier": "^3.3.2",
     "typescript": "^5.5.0",
     "vitest": "^2.1.0",
-    "wrangler": "^3.62.0"
+    "wrangler": "^4.79.0"
   },
   "engines": {
     "node": ">=20"
