@@ -6,26 +6,27 @@ import { useReactionStore } from "@/stores/reactionStore";
 import { useI18n } from "@/i18n";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 // ─────────────────────────────────────────────────────────────────────────────
-// Giphy API (public beta key — replace with your own in production)
-// https://developers.giphy.com/docs/api/endpoint#search
+// Tenor v1 API (public demo key — replace with your own from tenor.com)
+// https://tenor.com/gifapi/documentation
 // ─────────────────────────────────────────────────────────────────────────────
-const GIPHY_API_KEY = "dc6zaTOxFJmzC"; // public beta key
-async function searchGiphy(query, limit = 12) {
-    const url = new URL("https://api.giphy.com/v1/gifs/search");
-    url.searchParams.set("api_key", GIPHY_API_KEY);
+const TENOR_KEY = "LIVDSRZULELA";
+async function searchGifs(query, limit = 12) {
+    const url = new URL("https://g.tenor.com/v1/search");
+    url.searchParams.set("key", TENOR_KEY);
     url.searchParams.set("q", query);
     url.searchParams.set("limit", String(limit));
-    url.searchParams.set("rating", "g");
-    url.searchParams.set("lang", "en");
+    url.searchParams.set("contentfilter", "low");
+    url.searchParams.set("media_filter", "minimal");
+    url.searchParams.set("ar_range", "all");
     const res = await fetch(url.toString());
     if (!res.ok)
         return [];
     const json = (await res.json());
-    return json.data.map((g) => ({
+    return json.results.map((g) => ({
         id: g.id,
-        url: g.images.fixed_width.webp ?? g.images.fixed_width.url,
+        url: g.media[0]?.tinygif?.url ?? g.media[0]?.gif?.url ?? "",
         title: g.title,
-    }));
+    })).filter((g) => g.url);
 }
 export function GiphyChat({ send, variant = "player" }) {
     const { t } = useI18n();
@@ -41,7 +42,7 @@ export function GiphyChat({ send, variant = "player" }) {
             return;
         setLoading(true);
         try {
-            const gifs = await searchGiphy(q);
+            const gifs = await searchGifs(q);
             setResults(gifs);
         }
         finally {

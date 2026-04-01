@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, Users, BarChart3, MessageSquare, X } from "lucide-react";
+import { ChevronRight, Users, BarChart3, SkipForward, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Timer } from "@/components/game/Timer";
 import { Leaderboard, Podium } from "@/components/game/Leaderboard";
@@ -22,7 +22,6 @@ export default function HostGame() {
   const navigate = useNavigate();
   const { t, interp } = useI18n();
   const [confirmEnd, setConfirmEnd] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
 
   const { data: sessionData } = useQuery({
     queryKey: ["session-data", sessionId],
@@ -61,6 +60,10 @@ export default function HostGame() {
     players,
   } = store;
 
+  const handleForceReveal = () => {
+    send({ type: "force_reveal" });
+  };
+
   const handleNext = () => {
     if (phase === "revealing") {
       send({ type: "show_leaderboard" });
@@ -78,59 +81,77 @@ export default function HostGame() {
     navigate(`/results/${sessionId}`);
   };
 
+  const allAnswered = players.length > 0 && answerCount >= players.length;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
       <ReactionOverlay />
       {/* Status bar */}
-      <div className="flex items-center justify-between px-6 py-3 bg-black/20">
+      <div className="flex items-center justify-between px-6 py-3 bg-black/20 shrink-0">
         <span className="text-sm font-medium text-white/70">
           {interp(t.host_game.question_progress, {
             n: currentQuestionIndex + 1,
             m: totalQuestions,
           })}
         </span>
-        <div className="flex items-center gap-2 text-white/70 text-sm">
-          <Users size={14} aria-hidden />
-          {players.length}
+        <div className="flex items-center gap-3">
+          {allAnswered && phase === "question" && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-0.5 rounded-full">
+              <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
+            </span>
+          )}
+          {phase === "question" && (
+            <span className="flex items-center gap-1 text-sm text-white/60">
+              <BarChart3 size={14} aria-hidden />
+              {answerCount}/{players.length}
+            </span>
+          )}
+          <span className="flex items-center gap-1 text-sm text-white/60">
+            <Users size={14} aria-hidden />
+            {players.length}
+          </span>
         </div>
       </div>
 
-      {/* Always-on join strip — compact QR + code visible even mid-game */}
+      {/* Always-on join strip */}
       {roomCode && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pt-3 shrink-0">
           <JoinPanel roomCode={roomCode} dark compact />
         </div>
       )}
 
-      <div className="flex-1 flex flex-col items-center justify-start px-4 py-8 max-w-4xl mx-auto w-full gap-6">
+      {/* Main area: left content + right chat */}
+      <div className="flex-1 flex min-h-0">
+        {/* ── Left: game content ── */}
+        <div className="flex-1 flex flex-col items-center justify-start px-4 py-6 overflow-y-auto gap-6 max-w-3xl mx-auto w-full">
 
         {/* LOBBY */}
-        {phase === "lobby" && (
-          <div className="text-center">
-            <p className="text-white/60">{t.host_game.waiting}</p>
-          </div>
-        )}
+          {phase === "lobby" && (
+            <div className="text-center">
+              <p className="text-white/60">{t.host_game.waiting}</p>
+            </div>
+          )}
 
-        {/* QUESTION phase */}
-        {(phase === "question" || phase === "revealing") && currentQuestion && (
-          <>
-            <div className="w-full bg-white/10 rounded-3xl p-6 text-center">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-sm text-white/60">
-                  {interp(t.host_game.question_progress, { n: currentQuestionIndex + 1, m: totalQuestions })}
-                </span>
-                {phase === "question" && (
-                  <Timer
-                    timeLimit={timeLimit}
-                    startTime={questionStartTime}
-                    size={72}
-                  />
-                )}
-                <div className="flex items-center gap-1 text-sm text-white/60">
-                  <BarChart3 size={14} aria-hidden />
-                  {interp(t.host_game.answer_count, { count: answerCount, total: players.length })}
+          {/* QUESTION phase */}
+          {(phase === "question" || phase === "revealing") && currentQuestion && (
+            <>
+              <div className="w-full bg-white/10 rounded-3xl p-6 text-center">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm text-white/60">
+                    {interp(t.host_game.question_progress, { n: currentQuestionIndex + 1, m: totalQuestions })}
+                  </span>
+                  {phase === "question" && (
+                    <Timer
+                      timeLimit={timeLimit}
+                      startTime={questionStartTime}
+                      size={72}
+                    />
+                  )}
+                  <div className="flex items-center gap-1 text-sm text-white/60">
+                    <BarChart3 size={14} aria-hidden />
+                    {interp(t.host_game.answer_count, { count: answerCount, total: players.length })}
+                  </div>
                 </div>
-              </div>
 
               {currentQuestion.imageUrl && (
                 <img
@@ -300,90 +321,85 @@ export default function HostGame() {
           </>
         )}
 
-        {/* LEADERBOARD phase */}
-        {phase === "leaderboard" && (
-          <div className="w-full space-y-4">
-            <h2 className="font-display font-bold text-2xl text-center">{t.host_game.leaderboard}</h2>
-            <Leaderboard entries={leaderboard} compact />
-          </div>
-        )}
-
-        {/* ENDED phase */}
-        {phase === "ended" && (
-          <div className="w-full text-center space-y-4">
-            <h2 className="font-display font-bold text-3xl">{t.host_game.game_over}</h2>
-            <Podium entries={leaderboard} />
-            <div className="pt-4">
-              <Leaderboard entries={leaderboard} />
-            </div>
-          </div>
-        )}
-
-        {/* Controls */}
-        <div className="flex gap-3 mt-auto flex-wrap">
-          {(phase === "revealing" || phase === "leaderboard") && (
-            <Button
-              size="lg"
-              className="bg-accent-500 hover:bg-accent-600"
-              onClick={handleNext}
-            >
-              {phase === "revealing" ? t.host_game.show_leaderboard : t.host_game.next_question}
-              <ChevronRight size={20} aria-hidden />
-            </Button>
-          )}
-          {phase !== "lobby" && phase !== "ended" && !confirmEnd && (
-            <Button variant="ghost" className="text-white/60 hover:text-white" onClick={handleEnd}>
-              {t.host_game.end_game}
-            </Button>
-          )}
-          {/* GIF chat toggle for host */}
-          {phase !== "ended" && (
-            <Button
-              variant="ghost"
-              className="text-white/60 hover:text-white ml-auto"
-              onClick={() => setChatOpen((v) => !v)}
-              aria-label="GIF chat"
-              aria-expanded={chatOpen}
-            >
-              {chatOpen ? <X size={18} aria-hidden /> : <MessageSquare size={18} aria-hidden />}
-            </Button>
-          )}
-          {/* Inline confirm */}
-          {confirmEnd && (
-            <div className="flex items-center gap-2 bg-black/40 rounded-2xl px-4 py-2">
-              <span className="text-sm text-white/80">{t.host_game.end_game_confirm}</span>
-              <Button
-                size="sm"
-                className="bg-rose-500 hover:bg-rose-600"
-                onClick={confirmEndGame}
-              >
-                {t.common.yes}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-white/70"
-                onClick={() => setConfirmEnd(false)}
-              >
-                {t.common.cancel}
-              </Button>
+          {/* LEADERBOARD phase */}
+          {phase === "leaderboard" && (
+            <div className="w-full space-y-4">
+              <h2 className="font-display font-bold text-2xl text-center">{t.host_game.leaderboard}</h2>
+              <Leaderboard entries={leaderboard} compact />
             </div>
           )}
+
+          {/* ENDED phase */}
+          {phase === "ended" && (
+            <div className="w-full text-center space-y-4">
+              <h2 className="font-display font-bold text-3xl">{t.host_game.game_over}</h2>
+              <Podium entries={leaderboard} />
+              <div className="pt-4">
+                <Leaderboard entries={leaderboard} />
+              </div>
+            </div>
+          )}
+
+          {/* Controls */}
+          <div className="flex gap-3 mt-auto flex-wrap">
+            {phase === "question" && (
+              <Button
+                size="lg"
+                className={allAnswered ? "bg-emerald-500 hover:bg-emerald-600" : "bg-white/20 hover:bg-white/30"}
+                onClick={handleForceReveal}
+              >
+                <SkipForward size={18} aria-hidden />
+                {allAnswered ? "Toon antwoord" : "Sla over"}
+              </Button>
+            )}
+            {(phase === "revealing" || phase === "leaderboard") && (
+              <Button
+                size="lg"
+                className="bg-accent-500 hover:bg-accent-600"
+                onClick={handleNext}
+              >
+                {phase === "revealing" ? t.host_game.show_leaderboard : t.host_game.next_question}
+                <ChevronRight size={20} aria-hidden />
+              </Button>
+            )}
+            {phase !== "lobby" && phase !== "ended" && !confirmEnd && (
+              <Button variant="ghost" className="text-white/60 hover:text-white" onClick={handleEnd}>
+                {t.host_game.end_game}
+              </Button>
+            )}
+            {/* Inline confirm */}
+            {confirmEnd && (
+              <div className="flex items-center gap-2 bg-black/40 rounded-2xl px-4 py-2">
+                <span className="text-sm text-white/80">{t.host_game.end_game_confirm}</span>
+                <Button
+                  size="sm"
+                  className="bg-rose-500 hover:bg-rose-600"
+                  onClick={confirmEndGame}
+                >
+                  {t.common.yes}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-white/70"
+                  onClick={() => setConfirmEnd(false)}
+                >
+                  {t.common.cancel}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* GIF chat sidebar (slides in) */}
-        <AnimatePresence>
-          {chatOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: 40 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 40 }}
-              className="fixed top-16 right-0 h-[calc(100vh-4rem)] w-80 bg-white z-40 shadow-2xl flex flex-col"
-            >
+        {/* ── Right: always-visible GIF chat sidebar ── */}
+        {phase !== "ended" && (
+          <div className="hidden lg:flex w-80 bg-white/5 border-l border-white/10 flex-col shrink-0">
+            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest px-4 pt-4 pb-2">GIF chat</p>
+            <div className="flex-1 min-h-0">
               <GiphyChat send={send} variant="host" />
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

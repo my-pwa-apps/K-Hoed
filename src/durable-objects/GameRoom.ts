@@ -382,6 +382,15 @@ export class GameRoom implements DurableObject {
         await this.advanceQuestion();
         break;
 
+      case "force_reveal":
+        if (this.phase !== "question") {
+          this.sendTo(ws, { type: "error", message: "Not in question phase" });
+          return;
+        }
+        await this.state.storage.deleteAlarm();
+        await this.endCurrentQuestion();
+        break;
+
       case "show_leaderboard":
         if (this.phase !== "revealing") {
           this.sendTo(ws, { type: "error", message: "Not in revealing phase" });

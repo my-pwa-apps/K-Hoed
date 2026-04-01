@@ -212,6 +212,7 @@ export type ClientMessage =
   | { type: "start_game" }
   | { type: "next_question" }
   | { type: "show_leaderboard" }
+  | { type: "force_reveal" }  // host skips remaining timer
   | { type: "end_game" }
   | { type: "kick_player"; playerId: string }
   | { type: "pong" }

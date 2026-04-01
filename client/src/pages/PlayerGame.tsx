@@ -206,34 +206,33 @@ export default function PlayerGame() {
         {/* ── QUESTION phase ── */}
         {phase === "question" && currentQuestion && (
           <>
-            <div className="w-full flex items-start gap-3">
-              <Timer
-                timeLimit={timeLimit}
-                startTime={questionStartTime}
-                size={60}
-                onExpire={() => {
-                  // Server will advance phase via alarm; client does nothing
-                }}
-              />
-              <div className="flex-1">
-                {currentQuestion.imageUrl && (
-                  <img
-                    src={currentQuestion.imageUrl}
-                    alt=""
-                    className="max-h-28 mx-auto rounded-xl object-cover mb-2"
-                  />
-                )}
-                {/* Media embed for audioclip / videoclip */}
-                {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
-                  <MediaEmbed
-                    url={currentQuestion.mediaUrl}
-                    type={currentQuestion.type}
-                  />
-                )}
-                <p className="font-display font-bold text-xl text-gray-900 text-center leading-snug">
+            {/* Full-width timer bar + question */}
+            <div className="w-full space-y-3">
+              <div className="flex items-center gap-3">
+                <Timer
+                  timeLimit={timeLimit}
+                  startTime={questionStartTime}
+                  size={56}
+                  onExpire={() => {}}
+                />
+                <p className="font-display font-bold text-lg text-gray-900 leading-snug flex-1">
                   {currentQuestion.text}
                 </p>
               </div>
+              {currentQuestion.imageUrl && (
+                <img
+                  src={currentQuestion.imageUrl}
+                  alt=""
+                  className="max-h-28 mx-auto rounded-xl object-cover"
+                />
+              )}
+              {/* Media embed for audioclip / videoclip */}
+              {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
+                <MediaEmbed
+                  url={currentQuestion.mediaUrl}
+                  type={currentQuestion.type}
+                />
+              )}
             </div>
 
             {/* Classic / multiple / truefalse answer grid */}
