@@ -160,7 +160,7 @@ export const en = {
         score: "Score",
         back_home: "Back to dashboard",
         loading: "Loading results…",
-        no_results: "No results available.",
+        no_results: "No results available.", view: "View results",
     },
     common: {
         loading: "Loading…",
@@ -173,7 +173,8 @@ export const en = {
         no: "No",
         or: "or",
         you: "You",
-        points_short: "pts",
+        points_short: "pts", correct_answer: "Correct answer:",
+        artist: "Artist:",
     },
     language: {
         en: "English",

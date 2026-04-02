@@ -163,6 +163,7 @@ export const nl = {
         back_home: "Terug naar dashboard",
         loading: "Resultaten laden…",
         no_results: "Geen resultaten beschikbaar.",
+        view: "Bekijk resultaten",
     },
     common: {
         loading: "Laden…",
@@ -176,6 +177,8 @@ export const nl = {
         or: "of",
         you: "Jij",
         points_short: "pnt",
+        correct_answer: "Juiste antwoord:",
+        artist: "Artiest:",
     },
     language: {
         en: "English",

@@ -6,7 +6,6 @@ import { useGameWebSocket } from "./useWebSocket";
 import { gameApi } from "@/lib/api";
 export function useHostGame({ sessionId, roomCode }) {
     const store = useGameStore();
-    const navigate = useNavigate();
     // Fetch a short-lived WS ticket (keeps JWT out of the WebSocket URL)
     const { data: ticketData } = useQuery({
         queryKey: ["ws-ticket", sessionId],
@@ -19,7 +18,7 @@ export function useHostGame({ sessionId, roomCode }) {
     const onMessage = useRef((msg) => {
         if (msg.type === "game_ended") {
             store.applyMessage(msg);
-            setTimeout(() => navigate(`/results/${sessionId}`), 3000);
+            // No longer auto-navigating to results so the host can view the animated podium
             return;
         }
         store.applyMessage(msg);
@@ -29,7 +28,6 @@ export function useHostGame({ sessionId, roomCode }) {
         onMessage.current = (msg) => {
             if (msg.type === "game_ended") {
                 store.applyMessage(msg);
-                setTimeout(() => navigate(`/results/${sessionId}`), 3000);
                 return;
             }
             store.applyMessage(msg);

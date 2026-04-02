@@ -326,8 +326,9 @@ export class GameRoom implements DurableObject {
       ...(reconnectLeaderboard && { leaderboard: reconnectLeaderboard }),
     });
 
-    // If reconnecting during an active question, resend the question
-    if (isReconnect && this.phase === "question" && this.currentQuestionIndex >= 0) {
+    // Send question state if they join mid-question (or during revealing/leaderboard so UI has question context)
+    const inGamePhase = this.phase === "question" || this.phase === "revealing" || this.phase === "leaderboard";
+    if (inGamePhase && this.currentQuestionIndex >= 0) {
       const q = this.questions[this.currentQuestionIndex]!;
       this.sendTo(ws, {
         type: "question_start",
@@ -337,23 +338,32 @@ export class GameRoom implements DurableObject {
         startTime: this.questionStartTime,
         timeLimit: q.time_limit,
       });
+
+      // If reconnecting during revealing or leaderboard, send their past answer result
+      if (isReconnect && (this.phase === "revealing" || this.phase === "leaderboard")) {
+        const sub = this.submissions.get(q.id)?.find(s => s.playerId === playerId);
+        if (sub) {
+          this.sendTo(ws, {
+            type: "answer_result",
+            correct: sub.scoreDelta > 0,
+            points: sub.scoreDelta,
+            streak: 0,
+          });
+        } else {
+          // Send 0 points if they didn't answer
+          this.sendTo(ws, {
+            type: "answer_result",
+            correct: false,
+            points: 0,
+            streak: 0,
+          });
+        }
+      }
     }
 
     // If reconnecting during ended phase, resend the final results
     if (isReconnect && this.phase === "ended" && reconnectLeaderboard) {
       this.sendTo(ws, { type: "game_ended", finalLeaderboard: reconnectLeaderboard });
-    }
-
-    if (!isReconnect && this.phase === "question" && this.currentQuestionIndex >= 0) {
-      const q = this.questions[this.currentQuestionIndex]!;
-      this.sendTo(ws, {
-        type: "question_start",
-        question: this.buildQuestionPayload(q),
-        questionIndex: this.currentQuestionIndex,
-        totalQuestions: this.questions.length,
-        startTime: this.questionStartTime,
-        timeLimit: q.time_limit,
-      });
     }
 
     await this.persistPlayers();
@@ -844,7 +854,7 @@ export class GameRoom implements DurableObject {
         type: "audioclip",
         correctTexts: [
           ...(cfg.songTitle ? [cfg.songTitle] : []),
-          ...(cfg.songArtist ? [`Artist: ${cfg.songArtist}`] : []),
+          ...(cfg.songArtist ? [cfg.songArtist] : []),
         ],
       };
     } else if (q.type === "videoclip" && q.config) {

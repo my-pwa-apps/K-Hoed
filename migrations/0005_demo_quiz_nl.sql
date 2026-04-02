@@ -180,7 +180,7 @@ INSERT OR IGNORE INTO questions (id, quiz_id, text, image_url, config, type, tim
 INSERT OR IGNORE INTO questions (id, quiz_id, text, image_url, config, type, time_limit, points, order_index, created_at) VALUES
   ('q_demo_13', '7a2b4c89-6395-473e-b9c2-88ee5f2fa759',
    'Klik op de locatie van Nederland op deze kaart van Europa.',
-   'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Europe_%28orthographic_projection%29.svg/600px-Europe_%28orthographic_projection%29.svg.png',
+   'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Europe_orthographic_Caucasus_Urals_boundary_%28with_borders%29.svg/600px-Europe_orthographic_Caucasus_Urals_boundary_%28with_borders%29.svg.png',
    '{"hotspotX":0.466,"hotspotY":0.34,"hotspotRadius":0.06}',
    'pinanswer', 25, 1000, 13, 1743500000000);
 

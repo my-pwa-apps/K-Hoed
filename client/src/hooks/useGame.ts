@@ -14,7 +14,6 @@ interface UseHostGameOptions {
 
 export function useHostGame({ sessionId, roomCode }: UseHostGameOptions) {
   const store = useGameStore();
-  const navigate = useNavigate();
 
   // Fetch a short-lived WS ticket (keeps JWT out of the WebSocket URL)
   const { data: ticketData } = useQuery({
@@ -29,7 +28,7 @@ export function useHostGame({ sessionId, roomCode }: UseHostGameOptions) {
   const onMessage = useRef((msg: ServerMessage) => {
     if (msg.type === "game_ended") {
       store.applyMessage(msg);
-      setTimeout(() => navigate(`/results/${sessionId}`), 3000);
+      // No longer auto-navigating to results so the host can view the animated podium
       return;
     }
     store.applyMessage(msg);
@@ -39,7 +38,6 @@ export function useHostGame({ sessionId, roomCode }: UseHostGameOptions) {
     onMessage.current = (msg: ServerMessage) => {
       if (msg.type === "game_ended") {
         store.applyMessage(msg);
-        setTimeout(() => navigate(`/results/${sessionId}`), 3000);
         return;
       }
       store.applyMessage(msg);

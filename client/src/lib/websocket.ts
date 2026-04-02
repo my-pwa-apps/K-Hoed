@@ -91,11 +91,15 @@ export class GameWebSocket {
       }
     };
 
-    this.ws.onclose = (e) => {
+      this.ws.onclose = (e) => {
       this.stopPing();
       this.setStatus("closed");
-      if (!this.intentionallyClosed && e.code !== 4001 && e.code !== 4002 && e.code !== 4004) {
+      // 4001: Unauthorised, 4002: Cannot join, 4003: Game in progress, 4004: Invalid state
+      if (!this.intentionallyClosed && e.code !== 4001 && e.code !== 4002 && e.code !== 4003 && e.code !== 4004) {
         this.scheduleReconnect();
+      } else if (e.code === 4001 || e.code === 4002 || e.code === 4003 || e.code === 4004) {
+        // Emit a specific message or just error out so UI leaves loading state
+        this.setStatus("error");
       }
     };
 

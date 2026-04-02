@@ -231,13 +231,13 @@ export default function HostGame() {
             {/* Audioclip reveal */}
             {currentQuestion.type === "audioclip" && phase === "revealing" && revealData?.correctTexts && (
               <div className="w-full bg-white rounded-3xl p-4 space-y-2">
-                <p className="font-semibold text-gray-700">🎵 Correct answer:</p>
-                <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">
-                  {revealData.correctTexts[0]}
-                </div>
-                {revealData.correctTexts[1] && (
-                  <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-2 text-amber-800 font-medium">
-                    Artist: {revealData.correctTexts[1]}
+                  <p className="font-semibold text-gray-700">🎵 {t.common.correct_answer}</p>
+                  <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">
+                    {revealData.correctTexts[0]}
+                  </div>
+                  {revealData.correctTexts[1] && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-2 text-amber-800 font-medium">
+                      {t.common.artist} {revealData.correctTexts[1]}
                   </div>
                 )}
               </div>
@@ -246,10 +246,7 @@ export default function HostGame() {
             {/* Videoclip reveal */}
             {currentQuestion.type === "videoclip" && phase === "revealing" && revealData?.correctTexts && (
               <div className="w-full bg-white rounded-3xl p-4 space-y-2">
-                <p className="font-semibold text-gray-700">🎬 Correct answer:</p>
-                <div className="bg-emerald-50 border border-emerald-300 rounded-xl px-4 py-2 text-emerald-800 font-medium">
-                  {revealData.correctTexts[0]}
-                </div>
+                  <p className="font-semibold text-gray-700">🎬 {t.common.correct_answer}</p>
               </div>
             )}
 
@@ -325,6 +322,11 @@ export default function HostGame() {
               <Podium entries={leaderboard} />
               <div className="pt-4">
                 <Leaderboard entries={leaderboard} />
+              </div>
+              <div className="pt-8">
+                <Button size="lg" onClick={() => navigate(`/results/${sessionId}`)}>
+                  {t.results.view ?? "View results"}
+                </Button>
               </div>
             </div>
           )}

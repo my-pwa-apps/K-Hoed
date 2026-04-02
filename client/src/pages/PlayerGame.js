@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Timer } from "@/components/game/Timer";
 import { Leaderboard, Podium } from "@/components/game/Leaderboard";
 import { GiphyChat } from "@/components/game/GiphyChat";
-import { useGameStore } from "@/stores/gameStore";
+import { useGameStore, initPlayerGame } from "@/stores/gameStore";
 import { usePlayerGame } from "@/hooks/useGame";
 import { useI18n } from "@/i18n";
 import { ANSWER_COLORS, ANSWER_SHAPES } from "@/lib/utils";
@@ -44,9 +44,26 @@ export default function PlayerGame() {
         catch { /* audio not available */ }
     }, []);
     useEffect(() => {
-        if (!state?.sessionId)
+        if (!state?.sessionId || !state?.roomCode) {
             navigate("/join", { replace: true });
-    }, [state, navigate]);
+            return;
+        }
+        // Try to recover state from localStorage if lost
+        if (store.role !== "player" || !store.playerId) {
+            try {
+                const raw = localStorage.getItem(`player-${state.roomCode}`);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.playerId && parsed.displayName) {
+                        initPlayerGame(state.sessionId, state.roomCode, parsed.playerId, parsed.displayName, parsed.avatarEmoji || "😀");
+                        return;
+                    }
+                }
+            }
+            catch { /* ignore parse error */ }
+            navigate(`/join/${state.roomCode}`, { replace: true });
+        }
+    }, [state, store.role, navigate]);
     const { status, send } = usePlayerGame({
         sessionId: state?.sessionId ?? "",
         roomCode: state?.roomCode ?? "",
