@@ -87,14 +87,18 @@ export default function HostGame() {
     <div className="min-h-screen bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
       <ReactionOverlay />
       {/* Status bar */}
-      <div className="flex items-center justify-between px-6 py-3 bg-black/20 shrink-0">
-        <span className="text-sm font-medium text-white/70">
+      <div className="flex items-center justify-between px-4 py-2 bg-black/20 shrink-0 gap-3">
+        <span className="text-sm font-medium text-white/70 shrink-0">
           {interp(t.host_game.question_progress, {
             n: currentQuestionIndex + 1,
             m: totalQuestions,
           })}
         </span>
-        <div className="flex items-center gap-3">
+        {/* Timer — centre of status bar during question */}
+        {phase === "question" && questionStartTime > 0 && (
+          <Timer timeLimit={timeLimit} startTime={questionStartTime} size={52} />
+        )}
+        <div className="flex items-center gap-3 shrink-0">
           {allAnswered && phase === "question" && (
             <span className="flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-0.5 rounded-full">
               <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
@@ -123,53 +127,39 @@ export default function HostGame() {
       {/* Main area: left content + right chat */}
       <div className="flex-1 flex min-h-0">
         {/* ── Left: game content ── */}
-        <div className="flex-1 flex flex-col items-center justify-start px-4 py-6 overflow-y-auto gap-6 max-w-3xl mx-auto w-full">
+        <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full">
+
+          {/* Scrollable question + answers area */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
 
         {/* LOBBY */}
           {phase === "lobby" && (
-            <div className="text-center">
+            <div className="text-center py-8">
               <p className="text-white/60">{t.host_game.waiting}</p>
             </div>
           )}
 
-          {/* QUESTION phase */}
+          {/* QUESTION phase — question text is the hero */}
           {(phase === "question" || phase === "revealing") && currentQuestion && (
             <>
-              <div className="w-full bg-white/10 rounded-3xl p-6 text-center">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm text-white/60">
-                    {interp(t.host_game.question_progress, { n: currentQuestionIndex + 1, m: totalQuestions })}
-                  </span>
-                  {phase === "question" && (
-                    <Timer
-                      timeLimit={timeLimit}
-                      startTime={questionStartTime}
-                      size={72}
-                    />
-                  )}
-                  <div className="flex items-center gap-1 text-sm text-white/60">
-                    <BarChart3 size={14} aria-hidden />
-                    {interp(t.host_game.answer_count, { count: answerCount, total: players.length })}
+              {/* Question hero */}
+              <div className="w-full bg-white/10 rounded-2xl px-5 py-4">
+                <h2 className="font-display font-bold text-xl sm:text-2xl text-center leading-snug">
+                  {currentQuestion.text}
+                </h2>
+                {currentQuestion.imageUrl && (
+                  <img
+                    src={currentQuestion.imageUrl}
+                    alt="Question illustration"
+                    className="max-h-40 mx-auto rounded-xl object-cover mt-3"
+                  />
+                )}
+                {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
+                  <div className="mt-3">
+                    <MediaEmbed url={currentQuestion.mediaUrl} type={currentQuestion.type} />
                   </div>
-                </div>
-
-              {currentQuestion.imageUrl && (
-                <img
-                  src={currentQuestion.imageUrl}
-                  alt="Question illustration"
-                  className="max-h-48 mx-auto rounded-2xl object-cover mb-4"
-                />
-              )}
-
-              {/* Media embed for audioclip / videoclip */}
-              {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
-                <MediaEmbed url={currentQuestion.mediaUrl} type={currentQuestion.type} />
-              )}
-
-              <h2 className="font-display font-bold text-2xl sm:text-3xl text-shadow">
-                {currentQuestion.text}
-              </h2>
-            </div>
+                )}
+              </div>
 
             {/* Answer grid — only for choice-based types */}
             {(currentQuestion.type === "classic" || currentQuestion.type === "multiple" || currentQuestion.type === "truefalse") && (
@@ -339,9 +329,10 @@ export default function HostGame() {
               </div>
             </div>
           )}
+          </div>{/* end scroll area */}
 
-          {/* Controls */}
-          <div className="flex gap-3 mt-auto flex-wrap">
+          {/* ── Sticky bottom controls bar ── */}
+          <div className="shrink-0 px-4 py-3 bg-black/30 border-t border-white/10 flex items-center gap-3 flex-wrap">
             {phase === "question" && (
               <Button
                 size="lg"
@@ -363,33 +354,23 @@ export default function HostGame() {
               </Button>
             )}
             {phase !== "lobby" && phase !== "ended" && !confirmEnd && (
-              <Button variant="ghost" className="text-white/60 hover:text-white" onClick={handleEnd}>
+              <Button variant="ghost" className="text-white/60 hover:text-white ml-auto" onClick={handleEnd}>
                 {t.host_game.end_game}
               </Button>
             )}
-            {/* Inline confirm */}
             {confirmEnd && (
               <div className="flex items-center gap-2 bg-black/40 rounded-2xl px-4 py-2">
                 <span className="text-sm text-white/80">{t.host_game.end_game_confirm}</span>
-                <Button
-                  size="sm"
-                  className="bg-rose-500 hover:bg-rose-600"
-                  onClick={confirmEndGame}
-                >
+                <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={confirmEndGame}>
                   {t.common.yes}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-white/70"
-                  onClick={() => setConfirmEnd(false)}
-                >
+                <Button size="sm" variant="ghost" className="text-white/70" onClick={() => setConfirmEnd(false)}>
                   {t.common.cancel}
                 </Button>
               </div>
             )}
           </div>
-        </div>
+        </div>{/* end left column */}
 
         {/* ── Right: always-visible GIF chat sidebar ── */}
         {phase !== "ended" && (
