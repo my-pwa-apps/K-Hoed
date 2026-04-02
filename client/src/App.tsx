@@ -41,15 +41,17 @@ export default function App() {
         <Route path="/results/:sessionId" element={<GameResults />} />
         <Route path="/brainstorm/:token" element={<BrainstormCollab />} />
 
-        {/* Protected host routes */}
+        {/* Protected host routes — with nav layout */}
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/quizzes" element={<QuizList />} />
           <Route path="/quizzes/new" element={<QuizEditor />} />
           <Route path="/quizzes/:id/edit" element={<QuizEditor />} />
-          <Route path="/host/:sessionId/lobby" element={<HostLobby />} />
-          <Route path="/host/:sessionId/game" element={<HostGame />} />
         </Route>
+
+        {/* Full-screen host game routes — no nav wrapper */}
+        <Route path="/host/:sessionId/lobby" element={<RequireAuth><HostLobby /></RequireAuth>} />
+        <Route path="/host/:sessionId/game" element={<RequireAuth><HostGame /></RequireAuth>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
