@@ -225,6 +225,8 @@ export class GameRoom implements DurableObject {
       })),
     });
 
+    await this.sendHostPhaseState(ws);
+
     return true;
   }
 
@@ -672,40 +674,156 @@ export class GameRoom implements DurableObject {
     this.phase = "revealing";
 
     const q = this.questions[this.currentQuestionIndex]!;
+    const reveal = this.buildRevealState(q);
+
+    // Update D1 player scores
+    for (const p of this.players.values()) {
+      void updatePlayerScore(this.env.DB, p.id, p.score);
+    }
+
+    this.broadcast({
+      type: "question_end",
+      correctAnswerIds: reveal.correctAnswerIds,
+      distribution: reveal.distribution,
+      ...(reveal.revealData !== undefined && { revealData: reveal.revealData }),
+    });
+    await this.persistMeta();
+  }
+
+  private async showLeaderboard(): Promise<void> {
+    this.phase = "leaderboard";
+    const entries = this.buildCurrentLeaderboard();
+    this.broadcast({ type: "leaderboard", entries, questionIndex: this.currentQuestionIndex });
+    await this.persistMeta();
+  }
+
+  private async advanceQuestion(): Promise<void> {
+    this.currentQuestionIndex += 1;
+
+    if (this.currentQuestionIndex >= this.questions.length) {
+      await this.endGame();
+      return;
+    }
+
+    this.phase = "question";
+    await this.broadcastQuestion();
+  }
+
+  private async endGame(): Promise<void> {
+    this.phase = "ended";
+    await this.state.storage.deleteAlarm();
+    await updateSessionStatus(this.env.DB, this.sessionId, "ended", { ended_at: Date.now() });
+
+    const finalLeaderboard = this.buildCurrentLeaderboard();
+    this.broadcast({ type: "game_ended", finalLeaderboard });
+
+    // Persist final state
+    await this.persistMeta();
+
+    // Schedule connection close via alarm (setTimeout doesn't survive DO hibernation)
+    await this.state.storage.setAlarm(Date.now() + 5000);
+  }
+
+  private async sendHostPhaseState(ws: WebSocket): Promise<void> {
+    if (this.currentQuestionIndex < 0 || this.currentQuestionIndex >= this.questions.length) {
+      if (this.phase === "leaderboard") {
+        this.sendTo(ws, {
+          type: "leaderboard",
+          entries: this.buildCurrentLeaderboard(),
+          questionIndex: this.currentQuestionIndex,
+        });
+      } else if (this.phase === "ended") {
+        this.sendTo(ws, {
+          type: "game_ended",
+          finalLeaderboard: this.buildCurrentLeaderboard(),
+        });
+      }
+      return;
+    }
+
+    const question = this.questions[this.currentQuestionIndex]!;
+
+    if (this.phase === "question" || this.phase === "revealing" || this.phase === "leaderboard") {
+      this.sendTo(ws, {
+        type: "question_start",
+        question: this.buildQuestionPayload(question),
+        questionIndex: this.currentQuestionIndex,
+        totalQuestions: this.questions.length,
+        startTime: this.questionStartTime,
+        timeLimit: question.time_limit,
+      });
+    }
+
+    if (this.phase === "question") {
+      const submissions = this.submissions.get(question.id) ?? [];
+      this.sendTo(ws, {
+        type: "answer_received",
+        answerCount: submissions.length,
+        totalPlayers: this.players.size,
+      });
+      return;
+    }
+
+    if (this.phase === "revealing" || this.phase === "leaderboard") {
+      const reveal = this.buildRevealState(question);
+      this.sendTo(ws, {
+        type: "question_end",
+        correctAnswerIds: reveal.correctAnswerIds,
+        distribution: reveal.distribution,
+        ...(reveal.revealData !== undefined && { revealData: reveal.revealData }),
+      });
+    }
+
+    if (this.phase === "leaderboard") {
+      this.sendTo(ws, {
+        type: "leaderboard",
+        entries: this.buildCurrentLeaderboard(),
+        questionIndex: this.currentQuestionIndex,
+      });
+      return;
+    }
+
+    if (this.phase === "ended") {
+      this.sendTo(ws, {
+        type: "game_ended",
+        finalLeaderboard: this.buildCurrentLeaderboard(),
+      });
+    }
+  }
+
+  private buildRevealState(q: QuestionWithAnswers): {
+    correctAnswerIds: string[];
+    distribution: Record<string, number>;
+    revealData?: RevealData;
+  } {
     const submissions = this.submissions.get(q.id) ?? [];
 
-    // Correct IDs in option order (used for classic/multiple/truefalse)
     const correctIds = q.answer_options.filter((a) => a.is_correct).map((a) => a.id);
-    // Correct IDs in puzzle order (used for puzzle)
     const correctOrder = [...q.answer_options]
       .sort((a, b) => a.order_index - b.order_index)
       .map((a) => a.id);
 
-    // Build answer distribution per type
     const distribution: Record<string, number> = {};
     if (q.type === "classic" || q.type === "multiple" || q.type === "truefalse") {
       for (const opt of q.answer_options) distribution[opt.id] = 0;
       for (const sub of submissions) {
-        for (const aid of sub.answerIds) {
-          if (aid in distribution) distribution[aid]!++;
+        for (const answerId of sub.answerIds) {
+          if (answerId in distribution) distribution[answerId]!++;
         }
       }
     } else if (q.type === "typeanswer" || q.type === "audioclip" || q.type === "videoclip") {
       for (const sub of submissions) {
-        if (sub.answerText) {
-          const key = sub.answerText.trim().toLowerCase();
-          distribution[key] = (distribution[key] ?? 0) + 1;
-        }
+        if (!sub.answerText) continue;
+        const key = sub.answerText.trim().toLowerCase();
+        distribution[key] = (distribution[key] ?? 0) + 1;
       }
     } else if (q.type === "slider") {
       for (const sub of submissions) {
-        if (sub.sliderValue !== undefined) {
-          const key = `${sub.sliderValue}`;
-          distribution[key] = (distribution[key] ?? 0) + 1;
-        }
+        if (sub.sliderValue === undefined) continue;
+        const key = `${sub.sliderValue}`;
+        distribution[key] = (distribution[key] ?? 0) + 1;
       }
     } else {
-      // puzzle / pinanswer: binary
       distribution.correct = 0;
       distribution.wrong = 0;
       for (const sub of submissions) {
@@ -714,7 +832,6 @@ export class GameRoom implements DurableObject {
       }
     }
 
-    // Build revealData for non-standard types
     let revealData: RevealData | undefined;
     if (q.type === "typeanswer") {
       revealData = {
@@ -754,52 +871,11 @@ export class GameRoom implements DurableObject {
       };
     }
 
-    // Update D1 player scores
-    for (const p of this.players.values()) {
-      void updatePlayerScore(this.env.DB, p.id, p.score);
-    }
-
-    this.broadcast({
-      type: "question_end",
+    return {
       correctAnswerIds: q.type === "puzzle" ? correctOrder : correctIds,
       distribution,
       ...(revealData !== undefined && { revealData }),
-    });
-    await this.persistMeta();
-  }
-
-  private async showLeaderboard(): Promise<void> {
-    this.phase = "leaderboard";
-    const entries = this.buildCurrentLeaderboard();
-    this.broadcast({ type: "leaderboard", entries, questionIndex: this.currentQuestionIndex });
-    await this.persistMeta();
-  }
-
-  private async advanceQuestion(): Promise<void> {
-    this.currentQuestionIndex += 1;
-
-    if (this.currentQuestionIndex >= this.questions.length) {
-      await this.endGame();
-      return;
-    }
-
-    this.phase = "question";
-    await this.broadcastQuestion();
-  }
-
-  private async endGame(): Promise<void> {
-    this.phase = "ended";
-    await this.state.storage.deleteAlarm();
-    await updateSessionStatus(this.env.DB, this.sessionId, "ended", { ended_at: Date.now() });
-
-    const finalLeaderboard = this.buildCurrentLeaderboard();
-    this.broadcast({ type: "game_ended", finalLeaderboard });
-
-    // Persist final state
-    await this.persistMeta();
-
-    // Schedule connection close via alarm (setTimeout doesn't survive DO hibernation)
-    await this.state.storage.setAlarm(Date.now() + 5000);
+    };
   }
 
   // ─── Broadcast helpers ────────────────────────────────────────────────────

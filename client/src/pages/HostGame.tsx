@@ -87,33 +87,36 @@ export default function HostGame() {
     <div className="min-h-screen bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
       <ReactionOverlay />
       {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-black/20 shrink-0 gap-3">
-        <span className="text-sm font-medium text-white/70 shrink-0">
-          {interp(t.host_game.question_progress, {
-            n: currentQuestionIndex + 1,
-            m: totalQuestions,
-          })}
-        </span>
-        {/* Timer — centre of status bar during question */}
-        {phase === "question" && questionStartTime > 0 && (
-          <Timer timeLimit={timeLimit} startTime={questionStartTime} size={52} />
-        )}
-        <div className="flex items-center gap-3 shrink-0">
-          {allAnswered && phase === "question" && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-0.5 rounded-full">
-              <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
+      <div className="px-4 py-3 bg-black/20 shrink-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-white/70">
+              {interp(t.host_game.question_progress, {
+                n: currentQuestionIndex + 1,
+                m: totalQuestions,
+              })}
             </span>
-          )}
-          {phase === "question" && (
-            <span className="flex items-center gap-1 text-sm text-white/60">
-              <BarChart3 size={14} aria-hidden />
-              {answerCount}/{players.length}
+            <span className="flex items-center gap-1 text-sm text-white/60 shrink-0">
+              <Users size={14} aria-hidden />
+              {players.length}
             </span>
-          )}
-          <span className="flex items-center gap-1 text-sm text-white/60">
-            <Users size={14} aria-hidden />
-            {players.length}
-          </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            {phase === "question" && questionStartTime > 0 && (
+              <Timer timeLimit={timeLimit} startTime={questionStartTime} size={48} />
+            )}
+            {allAnswered && phase === "question" && (
+              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-1 rounded-full">
+                <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
+              </span>
+            )}
+            {phase === "question" && (
+              <span className="flex items-center gap-1 text-sm text-white/60">
+                <BarChart3 size={14} aria-hidden />
+                {answerCount}/{players.length}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -127,7 +130,7 @@ export default function HostGame() {
       {/* Main area: left content + right chat */}
       <div className="flex-1 flex min-h-0">
         {/* ── Left: game content ── */}
-        <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full">
+        <div className="flex-1 flex flex-col min-h-0 max-w-4xl mx-auto w-full">
 
           {/* Scrollable question + answers area */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -143,15 +146,15 @@ export default function HostGame() {
           {(phase === "question" || phase === "revealing") && currentQuestion && (
             <>
               {/* Question hero */}
-              <div className="w-full bg-white/10 rounded-2xl px-5 py-4">
-                <h2 className="font-display font-bold text-xl sm:text-2xl text-center leading-snug">
+              <div className="w-full bg-white/10 rounded-2xl px-4 py-4 sm:px-5">
+                <h2 className="font-display font-bold text-lg sm:text-2xl text-center leading-snug text-balance">
                   {currentQuestion.text}
                 </h2>
                 {currentQuestion.imageUrl && (
                   <img
                     src={currentQuestion.imageUrl}
                     alt="Question illustration"
-                    className="max-h-40 mx-auto rounded-xl object-cover mt-3"
+                    className="w-full max-h-40 sm:max-h-56 mx-auto rounded-xl object-cover mt-3"
                   />
                 )}
                 {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
@@ -163,7 +166,7 @@ export default function HostGame() {
 
             {/* Answer grid — only for choice-based types */}
             {(currentQuestion.type === "classic" || currentQuestion.type === "multiple" || currentQuestion.type === "truefalse") && (
-            <div className="grid grid-cols-2 gap-3 w-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
               {currentQuestion.answerOptions.map((opt, i) => {
                 const color = ANSWER_COLORS[i % ANSWER_COLORS.length]!;
                 const isCorrect = correctAnswerIds.includes(opt.id);
@@ -180,7 +183,7 @@ export default function HostGame() {
                       }`}
                   >
                     <span className="text-xl shrink-0">{ANSWER_SHAPES[i]}</span>
-                    <span className="flex-1 text-sm">{opt.text}</span>
+                    <span className="flex-1 text-sm sm:text-base leading-snug">{opt.text}</span>
                     {phase === "revealing" && (
                       <span className="font-bold text-lg">{count}</span>
                     )}
@@ -336,7 +339,7 @@ export default function HostGame() {
             {phase === "question" && (
               <Button
                 size="lg"
-                className={allAnswered ? "bg-emerald-500 hover:bg-emerald-600" : "bg-white/20 hover:bg-white/30"}
+                className={`w-full sm:w-auto ${allAnswered ? "bg-emerald-500 hover:bg-emerald-600" : "bg-white/20 hover:bg-white/30"}`}
                 onClick={handleForceReveal}
               >
                 <SkipForward size={18} aria-hidden />
@@ -346,7 +349,7 @@ export default function HostGame() {
             {(phase === "revealing" || phase === "leaderboard") && (
               <Button
                 size="lg"
-                className="bg-accent-500 hover:bg-accent-600"
+                className="w-full sm:w-auto bg-accent-500 hover:bg-accent-600"
                 onClick={handleNext}
               >
                 {phase === "revealing" ? t.host_game.show_leaderboard : t.host_game.next_question}
@@ -354,12 +357,12 @@ export default function HostGame() {
               </Button>
             )}
             {phase !== "lobby" && phase !== "ended" && !confirmEnd && (
-              <Button variant="ghost" className="text-white/60 hover:text-white ml-auto" onClick={handleEnd}>
+              <Button variant="ghost" className="w-full sm:w-auto text-white/60 hover:text-white sm:ml-auto" onClick={handleEnd}>
                 {t.host_game.end_game}
               </Button>
             )}
             {confirmEnd && (
-              <div className="flex items-center gap-2 bg-black/40 rounded-2xl px-4 py-2">
+              <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 bg-black/40 rounded-2xl px-4 py-2">
                 <span className="text-sm text-white/80">{t.host_game.end_game_confirm}</span>
                 <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={confirmEndGame}>
                   {t.common.yes}

@@ -28,7 +28,7 @@ export function JoinPanel({ roomCode, dark = false, compact = false }: JoinPanel
 
   if (compact) {
     return (
-      <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${bg}`}>
+      <div className={`flex flex-col items-center gap-3 rounded-2xl px-4 py-3 text-center sm:flex-row sm:items-center sm:text-left ${bg}`}>
         <img
           src={qr}
           alt="QR code to join"
