@@ -26,19 +26,18 @@ export default function Dashboard() {
   const endedSessions = sessions?.filter((s) => s.status === "ended").length ?? 0;
 
   return (
-    <div className="space-y-3 sm:space-y-8">
+    <div className="space-y-2 sm:space-y-8 pb-10">
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-2 sm:gap-3">
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
         <div>
-          <h1 className="text-xl sm:text-3xl font-display font-bold text-gray-900">
+          <h1 className="text-lg sm:text-3xl font-display font-bold text-gray-900 leading-none">
             {interp(t.dashboard.welcome, { name: user?.display_name?.split(" ")[0] ?? "" })}
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5 sm:mt-1">{t.dashboard.subtitle}</p>
         </div>
-        <Link to="/quizzes/new">
-          <Button size="sm" className="sm:text-base">
-            <Plus size={16} />
-            New quiz
+        <Link to="/quizzes/new" className="shrink-0">
+          <Button size="sm" className="h-8 text-xs sm:text-base px-2">
+            <Plus size={14} className="mr-1" />
+            New
           </Button>
         </Link>
       </div>
@@ -55,20 +54,24 @@ export default function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <Card className="bg-gradient-to-br from-brand-500 to-brand-700 text-white border-0 shadow-lg px-3 py-3 sm:p-6">
-          <h2 className="font-display font-bold text-xs sm:text-xl sm:mb-2 leading-snug">{t.dashboard.start_game_title}</h2>
-          <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.start_game_body}</p>
-          <Link to="/quizzes" className="block mt-2">
-            <Button variant="secondary" size="sm" fullWidth>{t.dashboard.choose_quiz}</Button>
+      <div className="grid grid-cols-2 gap-2 sm:gap-4">
+        <Card className="bg-gradient-to-br flex flex-col justify-between from-brand-500 to-brand-700 text-white border-0 shadow flex-1 p-3 sm:p-6 p-2 rounded-xl">
+          <div>
+            <h2 className="font-display font-bold text-[13px] sm:text-xl sm:mb-2 leading-tight">{t.dashboard.start_game_title}</h2>
+            <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.start_game_body}</p>
+          </div>
+          <Link to="/quizzes" className="block mt-2 sm:mt-auto">
+            <Button variant="secondary" className="h-8 text-xs py-0 sm:h-10 sm:text-sm px-2 w-full">{t.dashboard.choose_quiz}</Button>
           </Link>
         </Card>
 
-        <Card className="bg-gradient-to-br from-accent-500 to-rose-500 text-white border-0 shadow-lg px-3 py-3 sm:p-6">
-          <h2 className="font-display font-bold text-xs sm:text-xl sm:mb-2 leading-snug">{t.dashboard.create_quiz_title}</h2>
-          <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.create_quiz_body}</p>
-          <Link to="/quizzes/new" className="block mt-2">
-            <Button variant="secondary" size="sm" fullWidth>{t.dashboard.start_building}</Button>
+        <Card className="bg-gradient-to-br flex flex-col justify-between from-accent-500 to-rose-500 text-white border-0 shadow flex-1 p-3 sm:p-6 p-2 rounded-xl">
+          <div>
+            <h2 className="font-display font-bold text-[13px] sm:text-xl sm:mb-2 leading-tight">{t.dashboard.create_quiz_title}</h2>
+            <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.create_quiz_body}</p>
+          </div>
+          <Link to="/quizzes/new" className="block mt-2 sm:mt-auto">
+            <Button variant="secondary" className="h-8 text-xs py-0 sm:h-10 sm:text-sm px-2 w-full">{t.dashboard.start_building}</Button>
           </Link>
         </Card>
       </div>
@@ -76,23 +79,23 @@ export default function Dashboard() {
       {/* Recent sessions */}
       {recentSessions.length > 0 && (
         <div>
-          <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3">{t.dashboard.recent_games}</h2>
-          <div className="space-y-1.5 sm:space-y-2">
+          <h2 className="text-xs sm:text-lg font-semibold text-gray-800 mb-2">{t.dashboard.recent_games}</h2>
+          <div className="space-y-1.5">
             {recentSessions.map((session) => (
               <div
                 key={session.id}
-                className="flex items-center justify-between bg-white rounded-xl px-3 sm:px-4 py-2 sm:py-3 border border-gray-100 shadow-sm"
+                className="flex items-center justify-between bg-white rounded-lg sm:rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-3 border border-gray-100 shadow-sm"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-mono font-bold text-brand-600 text-sm sm:text-lg shrink-0">
+                  <span className="font-mono font-bold text-brand-600 text-xs sm:text-lg shrink-0">
                     {session.room_code}
                   </span>
-                  <span className="text-xs sm:text-sm text-gray-500 truncate">
+                  <span className="text-[10px] sm:text-sm text-gray-500 truncate mt-0.5">
                     {new Date(session.created_at).toLocaleDateString()}
                   </span>
                 </div>
                 <span
-                  className={`badge text-xs shrink-0 ml-2 ${
+                  className={`badge text-[10px] sm:text-xs shrink-0 ml-2 px-1.5 py-0.5 ${
                     session.status === "ended"
                       ? "bg-gray-100 text-gray-600"
                       : session.status === "active"
@@ -121,13 +124,13 @@ function StatCard({
   value: number;
 }) {
   return (
-    <Card className="p-2.5 sm:p-5">
-      <div className="flex items-center gap-2 sm:gap-4">
-        <div className="p-1.5 sm:p-3 bg-brand-50 rounded-xl text-brand-600 shrink-0">{icon}</div>
-        <div className="min-w-0">
-          <p className="text-lg sm:text-2xl font-bold text-gray-900 tabular-nums">{value}</p>
-          <p className="text-xs text-gray-500 leading-tight">{label}</p>
-        </div>
+    <Card className="p-2 sm:p-5 flex flex-col items-center justify-center text-center sm:flex-row sm:items-start sm:text-left gap-1 sm:gap-4">
+      <div className="p-1 sm:p-3 bg-brand-50 rounded-lg sm:rounded-xl text-brand-600 shrink-0 [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-6 sm:[&>svg]:h-6">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm sm:text-2xl font-bold text-gray-900 tabular-nums leading-none mb-0.5">{value}</p>
+        <p className="text-[10px] sm:text-xs text-gray-500 leading-tight">{label}</p>
       </div>
     </Card>
   );
