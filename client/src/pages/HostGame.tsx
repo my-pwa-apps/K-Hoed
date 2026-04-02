@@ -84,7 +84,7 @@ export default function HostGame() {
   const allAnswered = players.length > 0 && answerCount >= players.length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
+    <div className="h-[100dvh] overflow-hidden bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
       <ReactionOverlay />
       {/* Status bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-black/20 shrink-0 gap-2 sm:gap-3">
