@@ -28,18 +28,18 @@ export function JoinPanel({ roomCode, dark = false, compact = false }: JoinPanel
 
   if (compact) {
     return (
-      <div className={`flex flex-col items-center gap-3 rounded-2xl px-4 py-3 text-center sm:flex-row sm:items-center sm:text-left ${bg}`}>
+      <div className={`flex items-center gap-3 rounded-2xl px-4 py-2.5 ${bg}`}>
         <img
           src={qr}
           alt="QR code to join"
-          width={56}
-          height={56}
+          width={50}
+          height={50}
           className="rounded-lg shrink-0"
         />
         <div className="min-w-0">
           <p className={`text-xs font-medium mb-0.5 ${sub}`}>Scan or visit</p>
-          <p className={`text-xs ${sub} truncate`}>{STATIC_JOIN_URL}</p>
-          <div className={`inline-block font-mono font-extrabold text-xl tracking-widest rounded-lg px-2 py-0.5 mt-1 ${codeBg} ${codeText}`}>
+          <p className={`text-xs ${sub} truncate hidden sm:block`}>{STATIC_JOIN_URL}</p>
+          <div className={`inline-block font-mono font-extrabold text-xl tracking-widest rounded-lg px-2 py-0.5 mt-0.5 ${codeBg} ${codeText}`}>
             {roomCode}
           </div>
         </div>

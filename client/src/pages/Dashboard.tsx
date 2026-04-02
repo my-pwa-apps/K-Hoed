@@ -26,7 +26,7 @@ export default function Dashboard() {
   const endedSessions = sessions?.filter((s) => s.status === "ended").length ?? 0;
 
   return (
-    <div className="space-y-4 sm:space-y-8">
+    <div className="space-y-3 sm:space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-2 sm:gap-3">
         <div>
@@ -55,20 +55,20 @@ export default function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-        <Card className="bg-gradient-to-br from-brand-500 to-brand-700 text-white border-0 shadow-lg p-4 sm:p-6">
-          <h2 className="font-display font-bold text-base sm:text-xl mb-1 sm:mb-2">{t.dashboard.start_game_title}</h2>
-          <p className="text-white/80 text-xs sm:text-sm mb-3 sm:mb-4">{t.dashboard.start_game_body}</p>
-          <Link to="/quizzes">
-            <Button variant="secondary" size="sm">{t.dashboard.choose_quiz}</Button>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <Card className="bg-gradient-to-br from-brand-500 to-brand-700 text-white border-0 shadow-lg px-3 py-3 sm:p-6">
+          <h2 className="font-display font-bold text-xs sm:text-xl sm:mb-2 leading-snug">{t.dashboard.start_game_title}</h2>
+          <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.start_game_body}</p>
+          <Link to="/quizzes" className="block mt-2">
+            <Button variant="secondary" size="sm" fullWidth>{t.dashboard.choose_quiz}</Button>
           </Link>
         </Card>
 
-        <Card className="bg-gradient-to-br from-accent-500 to-rose-500 text-white border-0 shadow-lg p-4 sm:p-6">
-          <h2 className="font-display font-bold text-base sm:text-xl mb-1 sm:mb-2">{t.dashboard.create_quiz_title}</h2>
-          <p className="text-white/80 text-xs sm:text-sm mb-3 sm:mb-4">{t.dashboard.create_quiz_body}</p>
-          <Link to="/quizzes/new">
-            <Button variant="secondary" size="sm">{t.dashboard.start_building}</Button>
+        <Card className="bg-gradient-to-br from-accent-500 to-rose-500 text-white border-0 shadow-lg px-3 py-3 sm:p-6">
+          <h2 className="font-display font-bold text-xs sm:text-xl sm:mb-2 leading-snug">{t.dashboard.create_quiz_title}</h2>
+          <p className="text-white/80 text-xs hidden sm:block sm:mb-4">{t.dashboard.create_quiz_body}</p>
+          <Link to="/quizzes/new" className="block mt-2">
+            <Button variant="secondary" size="sm" fullWidth>{t.dashboard.start_building}</Button>
           </Link>
         </Card>
       </div>
@@ -121,12 +121,12 @@ function StatCard({
   value: number;
 }) {
   return (
-    <Card className="p-3 sm:p-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-        <div className="p-2 sm:p-3 bg-brand-50 rounded-xl text-brand-600 shrink-0">{icon}</div>
-        <div>
-          <p className="text-xl sm:text-2xl font-bold text-gray-900 tabular-nums">{value}</p>
-          <p className="text-xs sm:text-sm text-gray-500 leading-tight">{label}</p>
+    <Card className="p-2.5 sm:p-5">
+      <div className="flex items-center gap-2 sm:gap-4">
+        <div className="p-1.5 sm:p-3 bg-brand-50 rounded-xl text-brand-600 shrink-0">{icon}</div>
+        <div className="min-w-0">
+          <p className="text-lg sm:text-2xl font-bold text-gray-900 tabular-nums">{value}</p>
+          <p className="text-xs text-gray-500 leading-tight">{label}</p>
         </div>
       </div>
     </Card>

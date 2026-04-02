@@ -87,36 +87,32 @@ export default function HostGame() {
     <div className="min-h-screen bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
       <ReactionOverlay />
       {/* Status bar */}
-      <div className="px-4 py-3 bg-black/20 shrink-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium text-white/70">
-              {interp(t.host_game.question_progress, {
-                n: currentQuestionIndex + 1,
-                m: totalQuestions,
-              })}
+      <div className="flex items-center justify-between px-4 py-2 bg-black/20 shrink-0 gap-2 sm:gap-3">
+        <span className="text-xs sm:text-sm font-medium text-white/70 shrink-0">
+          {interp(t.host_game.question_progress, {
+            n: currentQuestionIndex + 1,
+            m: totalQuestions,
+          })}
+        </span>
+        {phase === "question" && questionStartTime > 0 && (
+          <Timer timeLimit={timeLimit} startTime={questionStartTime} size={44} />
+        )}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {allAnswered && phase === "question" && (
+            <span className="hidden sm:flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-0.5 rounded-full">
+              <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
             </span>
-            <span className="flex items-center gap-1 text-sm text-white/60 shrink-0">
-              <Users size={14} aria-hidden />
-              {players.length}
+          )}
+          {phase === "question" && (
+            <span className="flex items-center gap-1 text-xs sm:text-sm text-white/60">
+              <BarChart3 size={12} aria-hidden />
+              {answerCount}/{players.length}
             </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-            {phase === "question" && questionStartTime > 0 && (
-              <Timer timeLimit={timeLimit} startTime={questionStartTime} size={48} />
-            )}
-            {allAnswered && phase === "question" && (
-              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-300 bg-emerald-900/50 px-2 py-1 rounded-full">
-                <CheckCircle2 size={12} aria-hidden /> Iedereen heeft geantwoord
-              </span>
-            )}
-            {phase === "question" && (
-              <span className="flex items-center gap-1 text-sm text-white/60">
-                <BarChart3 size={14} aria-hidden />
-                {answerCount}/{players.length}
-              </span>
-            )}
-          </div>
+          )}
+          <span className="flex items-center gap-1 text-xs sm:text-sm text-white/60 shrink-0">
+            <Users size={12} aria-hidden />
+            {players.length}
+          </span>
         </div>
       </div>
 
@@ -166,7 +162,7 @@ export default function HostGame() {
 
             {/* Answer grid — only for choice-based types */}
             {(currentQuestion.type === "classic" || currentQuestion.type === "multiple" || currentQuestion.type === "truefalse") && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            <div className="grid grid-cols-2 gap-3 w-full">
               {currentQuestion.answerOptions.map((opt, i) => {
                 const color = ANSWER_COLORS[i % ANSWER_COLORS.length]!;
                 const isCorrect = correctAnswerIds.includes(opt.id);
@@ -183,7 +179,7 @@ export default function HostGame() {
                       }`}
                   >
                     <span className="text-xl shrink-0">{ANSWER_SHAPES[i]}</span>
-                    <span className="flex-1 text-sm sm:text-base leading-snug">{opt.text}</span>
+                    <span className="flex-1 text-sm leading-snug">{opt.text}</span>
                     {phase === "revealing" && (
                       <span className="font-bold text-lg">{count}</span>
                     )}
