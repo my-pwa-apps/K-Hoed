@@ -92,16 +92,22 @@ export class GameRoom implements DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair) as [WebSocket, WebSocket];
 
+    console.log("[DO fetch]", JSON.stringify({ role, sessionId, displayName, playerId, doSessionId: this.sessionId, doInit: this.initialised }));
+
     if (role === "host") {
       const ok = await this.acceptHost(server, sessionId, ticket);
       if (!ok) {
-        server.close(4001, "Unauthorised");
+        console.log("[DO fetch] host REJECTED");
+        try { server.accept(); } catch {}
+        try { server.close(4001, "Unauthorised"); } catch {}
         return new Response(null, { status: 101, webSocket: client });
       }
     } else if (role === "player") {
       const ok = await this.acceptPlayer(server, sessionId, displayName, playerId, avatarEmoji);
       if (!ok) {
-        server.close(4002, "Cannot join");
+        console.log("[DO fetch] player REJECTED");
+        try { server.accept(); } catch {}
+        try { server.close(4002, "Cannot join"); } catch {}
         return new Response(null, { status: 101, webSocket: client });
       }
     } else {
@@ -237,11 +243,25 @@ export class GameRoom implements DurableObject {
     existingPlayerId: string,
     avatarEmoji: string,
   ): Promise<boolean> {
-    if (!displayName || displayName.length < 1 || displayName.length > 30) return false;
+    if (!displayName || displayName.length < 1 || displayName.length > 30) {
+      console.log("[acceptPlayer] REJECT: bad displayName", JSON.stringify({ displayName, len: displayName?.length }));
+      return false;
+    }
 
     const session = await getSessionById(this.env.DB, sessionId);
-    if (!session || session.id !== this.sessionId) return false;
-    if (session.status === "ended") return false;
+    if (!session || session.id !== this.sessionId) {
+      console.log("[acceptPlayer] REJECT: session mismatch", JSON.stringify({
+        sessionId,
+        dbSessionId: session?.id ?? "NOT_FOUND",
+        doSessionId: this.sessionId,
+        doInitialised: this.initialised,
+      }));
+      return false;
+    }
+    if (session.status === "ended") {
+      console.log("[acceptPlayer] REJECT: session ended");
+      return false;
+    }
 
     const safeName = containsProfanity(displayName) ? "Player" : displayName;
 
@@ -252,13 +272,14 @@ export class GameRoom implements DurableObject {
     if (existing) {
       const elapsed = existing.disconnectedAt ? Date.now() - existing.disconnectedAt : 0;
 
+      // Replace any live socket for the same player ID instead of treating it as a new join.
+      for (const existingWs of this.state.getWebSockets(`player:${existingPlayerId}`)) {
+        try { existingWs.close(4005, "Superseded by new connection"); } catch {}
+      }
+
       if (!existing.connected && elapsed > SCORING.RECONNECT_WINDOW_MS) {
-        // Reconnect window expired — treat as a brand-new player
-        if (this.phase !== "lobby") {
-          ws.close(4003, "Game already in progress");
-          return false;
-        }
-        playerId = newId();
+        // Reconnect window expired — treat as a brand-new player (late join allowed)
+        playerId = existingPlayerId || newId();
         this.players.set(playerId, {
           id: playerId,
           displayName: safeName,
@@ -275,21 +296,21 @@ export class GameRoom implements DurableObject {
         });
         this.broadcast({ type: "player_joined", player: { id: playerId, displayName: safeName, avatarEmoji: avatarEmoji || "😀", score: 0, connected: true } });
       } else {
-        // Valid reconnect within window
+        // Valid reconnect or same-player socket replacement
         playerId = existingPlayerId;
+        const wasDisconnected = !existing.connected;
         existing.connected = true;
         existing.disconnectedAt = null;
         isReconnect = true;
         await this.persistPlayers();
-        // Notify host that player is back
-        this.broadcastTo("host", { type: "player_joined", player: { id: playerId, displayName: existing.displayName, avatarEmoji: existing.avatarEmoji, score: existing.score, connected: true } });
+        if (wasDisconnected) {
+          // Notify host only when a previously disconnected player is back.
+          this.broadcastTo("host", { type: "player_joined", player: { id: playerId, displayName: existing.displayName, avatarEmoji: existing.avatarEmoji, score: existing.score, connected: true } });
+        }
       }
     } else {
-      if (this.phase !== "lobby") {
-        ws.close(4003, "Game already in progress");
-        return false;
-      }
-      playerId = newId();
+      // Allow late joiners mid-game with score 0
+      playerId = existingPlayerId || newId();
       this.players.set(playerId, {
         id: playerId,
         displayName: safeName,

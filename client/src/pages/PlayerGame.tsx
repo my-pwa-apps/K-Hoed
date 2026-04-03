@@ -33,6 +33,8 @@ export default function PlayerGame() {
   const [puzzleItems, setPuzzleItems] = useState<{ id: string; text: string }[]>([]);
   const [pinCoords, setPinCoords] = useState<{ x: number; y: number } | null>(null);
   const store = useGameStore();
+  const hasPlayerIdentity =
+    store.role === "player" && !!store.playerId && !!store.displayName;
 
   // N1: simple Web Audio beep — avoids loading external assets
   const playTone = useCallback((freq: number, duration: number, type: OscillatorType = "sine") => {
@@ -59,7 +61,7 @@ export default function PlayerGame() {
     }
     
     // Try to recover state from localStorage if lost
-    if (store.role !== "player" || !store.playerId) {
+    if (!hasPlayerIdentity) {
       try {
         const raw = localStorage.getItem(`player-${state.roomCode}`);
         if (raw) {
@@ -78,16 +80,14 @@ export default function PlayerGame() {
       } catch { /* ignore parse error */ }
       navigate(`/join/${state.roomCode}`, { replace: true });
     }
-  }, [state, store.role, navigate]);
+  }, [state, hasPlayerIdentity, navigate]);
 
   const { status, send } = usePlayerGame({
     sessionId: state?.sessionId ?? "",
     roomCode: state?.roomCode ?? "",
-    displayName: store.role === "player" ? store.displayName : "",
-    playerId: store.role === "player" ? store.playerId : "",
+    displayName: hasPlayerIdentity ? store.displayName : "",
+    playerId: hasPlayerIdentity ? store.playerId : "",
   });
-
-  if (store.role !== "player") return null;
 
   const {
     phase,
@@ -102,7 +102,7 @@ export default function PlayerGame() {
     leaderboard,
     totalScore,
     playerId,
-  } = store;
+  } = store as any;
 
   // Reset per-type state when question changes
   useEffect(() => {
@@ -192,6 +192,8 @@ export default function PlayerGame() {
     currentQuestion?.type === "multiple" ||
     currentQuestion?.type === "truefalse";
 
+  if (store.role !== "player") return null;
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header bar */}
@@ -204,8 +206,15 @@ export default function PlayerGame() {
               })
             : "…"}
         </span>
+        {/* DEBUG: socket status chip — remove after testing */}
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono ${
+          status === "open" ? "bg-green-100 text-green-700" :
+          status === "connecting" ? "bg-yellow-100 text-yellow-700" :
+          status === "error" ? "bg-red-100 text-red-700" :
+          "bg-gray-100 text-gray-500"
+        }`}>ws:{status} phase:{phase} id:{hasPlayerIdentity?"Y":"N"}</span>
         <span className="font-bold text-brand-600 tabular-nums">
-          {totalScore.toLocaleString()}&nbsp;{t.player_game.pts}
+          {(totalScore ?? 0).toLocaleString()}&nbsp;{t.player_game.pts}
         </span>
       </div>
 
@@ -219,7 +228,7 @@ export default function PlayerGame() {
               {t.player_game.waiting_title}
             </h2>
             <p className="text-gray-500">{t.player_game.waiting_sub}</p>
-            {status !== "open" && (
+            {(status === "connecting" || status === "error") && (
               <p className="text-xs text-amber-500 flex items-center gap-1">
                 <Clock size={12} aria-hidden="true" /> {t.player_game.reconnecting}
               </p>
@@ -267,7 +276,7 @@ export default function PlayerGame() {
                     currentQuestion.answerOptions.length <= 2 ? "grid-cols-1" : "grid-cols-2"
                   }`}
                 >
-                  {currentQuestion.answerOptions.map((opt, i) => {
+                  {currentQuestion.answerOptions.map((opt: any, i: number) => {
                     const color = ANSWER_COLORS[i % ANSWER_COLORS.length]!;
                     const selected = selectedAnswerIds.includes(opt.id);
                     return (

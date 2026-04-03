@@ -25,6 +25,7 @@ export default function PlayerGame() {
     const [puzzleItems, setPuzzleItems] = useState([]);
     const [pinCoords, setPinCoords] = useState(null);
     const store = useGameStore();
+    const hasPlayerIdentity = store.role === "player" && !!store.playerId && !!store.displayName;
     // N1: simple Web Audio beep — avoids loading external assets
     const playTone = useCallback((freq, duration, type = "sine") => {
         try {
@@ -49,7 +50,7 @@ export default function PlayerGame() {
             return;
         }
         // Try to recover state from localStorage if lost
-        if (store.role !== "player" || !store.playerId) {
+        if (!hasPlayerIdentity) {
             try {
                 const raw = localStorage.getItem(`player-${state.roomCode}`);
                 if (raw) {
@@ -63,15 +64,13 @@ export default function PlayerGame() {
             catch { /* ignore parse error */ }
             navigate(`/join/${state.roomCode}`, { replace: true });
         }
-    }, [state, store.role, navigate]);
+    }, [state, hasPlayerIdentity, navigate]);
     const { status, send } = usePlayerGame({
         sessionId: state?.sessionId ?? "",
         roomCode: state?.roomCode ?? "",
-        displayName: store.role === "player" ? store.displayName : "",
-        playerId: store.role === "player" ? store.playerId : "",
+        displayName: hasPlayerIdentity ? store.displayName : "",
+        playerId: hasPlayerIdentity ? store.playerId : "",
     });
-    if (store.role !== "player")
-        return null;
     const { phase, currentQuestion, currentQuestionIndex, totalQuestions, questionStartTime, timeLimit, selectedAnswerIds, answerSubmitted, lastResult, leaderboard, totalScore, playerId, } = store;
     // Reset per-type state when question changes
     useEffect(() => {
@@ -165,12 +164,17 @@ export default function PlayerGame() {
     const isClassicType = currentQuestion?.type === "classic" ||
         currentQuestion?.type === "multiple" ||
         currentQuestion?.type === "truefalse";
+    if (store.role !== "player")
+        return null;
     return (_jsxs("div", { className: "min-h-screen bg-gray-50 flex flex-col", children: [_jsxs("div", { className: "bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between", children: [_jsx("span", { className: "text-sm font-medium text-gray-500", children: currentQuestionIndex >= 0
                             ? interp(t.player_game.question_progress, {
                                 n: currentQuestionIndex + 1,
                                 m: totalQuestions,
                             })
-                            : "…" }), _jsxs("span", { className: "font-bold text-brand-600 tabular-nums", children: [totalScore.toLocaleString(), "\u00A0", t.player_game.pts] })] }), _jsxs("div", { className: "flex-1 flex flex-col items-center p-4 gap-4 max-w-lg mx-auto w-full", children: [phase === "lobby" && (_jsxs("div", { className: "flex flex-col items-center justify-center flex-1 text-center gap-4", children: [_jsx("div", { className: "animate-pulse text-5xl", "aria-hidden": "true", children: "\u23F3" }), _jsx("h2", { className: "font-display font-bold text-2xl text-gray-800", children: t.player_game.waiting_title }), _jsx("p", { className: "text-gray-500", children: t.player_game.waiting_sub }), status !== "open" && (_jsxs("p", { className: "text-xs text-amber-500 flex items-center gap-1", children: [_jsx(Clock, { size: 12, "aria-hidden": "true" }), " ", t.player_game.reconnecting] }))] })), phase === "question" && currentQuestion && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "w-full space-y-3", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx(Timer, { timeLimit: timeLimit, startTime: questionStartTime, size: 56, onExpire: () => { } }), _jsx("p", { className: "font-display font-bold text-lg text-gray-900 leading-snug flex-1", children: currentQuestion.text })] }), currentQuestion.imageUrl && (_jsx("img", { src: currentQuestion.imageUrl, alt: "", className: "max-h-28 mx-auto rounded-xl object-cover" })), (currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (_jsx(MediaEmbed, { url: currentQuestion.mediaUrl, type: currentQuestion.type }))] }), isClassicType && (_jsxs(_Fragment, { children: [_jsx("div", { className: `grid gap-3 w-full ${currentQuestion.answerOptions.length <= 2 ? "grid-cols-1" : "grid-cols-2"}`, children: currentQuestion.answerOptions.map((opt, i) => {
+                            : "…" }), _jsxs("span", { className: `text-[10px] px-2 py-0.5 rounded-full font-mono ${status === "open" ? "bg-green-100 text-green-700" :
+                            status === "connecting" ? "bg-yellow-100 text-yellow-700" :
+                                status === "error" ? "bg-red-100 text-red-700" :
+                                    "bg-gray-100 text-gray-500"}`, children: ["ws:", status, " phase:", phase, " id:", hasPlayerIdentity ? "Y" : "N"] }), _jsxs("span", { className: "font-bold text-brand-600 tabular-nums", children: [(totalScore ?? 0).toLocaleString(), "\u00A0", t.player_game.pts] })] }), _jsxs("div", { className: "flex-1 flex flex-col items-center p-4 gap-4 max-w-lg mx-auto w-full", children: [phase === "lobby" && (_jsxs("div", { className: "flex flex-col items-center justify-center flex-1 text-center gap-4", children: [_jsx("div", { className: "animate-pulse text-5xl", "aria-hidden": "true", children: "\u23F3" }), _jsx("h2", { className: "font-display font-bold text-2xl text-gray-800", children: t.player_game.waiting_title }), _jsx("p", { className: "text-gray-500", children: t.player_game.waiting_sub }), (status === "connecting" || status === "error") && (_jsxs("p", { className: "text-xs text-amber-500 flex items-center gap-1", children: [_jsx(Clock, { size: 12, "aria-hidden": "true" }), " ", t.player_game.reconnecting] }))] })), phase === "question" && currentQuestion && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "w-full space-y-3", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx(Timer, { timeLimit: timeLimit, startTime: questionStartTime, size: 56, onExpire: () => { } }), _jsx("p", { className: "font-display font-bold text-lg text-gray-900 leading-snug flex-1", children: currentQuestion.text })] }), currentQuestion.imageUrl && (_jsx("img", { src: currentQuestion.imageUrl, alt: "", className: "max-h-28 mx-auto rounded-xl object-cover" })), (currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (_jsx(MediaEmbed, { url: currentQuestion.mediaUrl, type: currentQuestion.type }))] }), isClassicType && (_jsxs(_Fragment, { children: [_jsx("div", { className: `grid gap-3 w-full ${currentQuestion.answerOptions.length <= 2 ? "grid-cols-1" : "grid-cols-2"}`, children: currentQuestion.answerOptions.map((opt, i) => {
                                             const color = ANSWER_COLORS[i % ANSWER_COLORS.length];
                                             const selected = selectedAnswerIds.includes(opt.id);
                                             return (_jsxs(motion.button, { whileTap: { scale: 0.96 }, onClick: () => handleSelectAnswer(opt.id), disabled: answerSubmitted, "aria-pressed": selected, "aria-label": opt.text, className: [

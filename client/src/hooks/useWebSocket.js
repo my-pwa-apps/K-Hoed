@@ -11,18 +11,27 @@ export function useGameWebSocket({ roomCode, role, sessionId, ticket, displayNam
         avatarEmoji,
     }), [roomCode, role, sessionId, ticket, displayName, playerId, avatarEmoji]);
     useEffect(() => {
-        if (!enabled || !roomCode || !sessionId)
+        if (!enabled || !roomCode || !sessionId) {
+            setStatus("closed");
             return;
+        }
         const ws = new GameWebSocket(buildUrl);
         wsRef.current = ws;
         const unsubMsg = ws.on("message", onMessage);
         const unsubStatus = ws.on("statusChange", setStatus);
-        ws.connect();
+        const connectTimer = window.setTimeout(() => {
+            if (wsRef.current !== ws)
+                return;
+            ws.connect();
+        }, 0);
         return () => {
+            clearTimeout(connectTimer);
             unsubMsg();
             unsubStatus();
             ws.disconnect();
-            wsRef.current = null;
+            if (wsRef.current === ws) {
+                wsRef.current = null;
+            }
         };
         // onMessage changes identity each render — intentionally not in deps
         // eslint-disable-next-line react-hooks/exhaustive-deps

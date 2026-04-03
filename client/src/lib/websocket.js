@@ -24,8 +24,12 @@ export class GameWebSocket {
     disconnect() {
         this.intentionallyClosed = true;
         this.clearTimers();
-        this.ws?.close(1000, "Client disconnect");
-        this.ws = null;
+        if (this.ws) {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.close(1000, "Client disconnect");
+            }
+            this.ws = null;
+        }
         this.setStatus("closed");
     }
     send(msg) {
@@ -52,19 +56,28 @@ export class GameWebSocket {
     }
     openConnection() {
         this.setStatus("connecting");
+        let currentWs;
         try {
-            this.ws = new WebSocket(this.buildUrl());
+            currentWs = new WebSocket(this.buildUrl());
+            this.ws = currentWs;
         }
         catch {
             this.scheduleReconnect();
             return;
         }
-        this.ws.onopen = () => {
+        currentWs.onopen = () => {
+            console.log("[WS onopen]", { isCurrent: this.ws === currentWs, url: currentWs.url });
+            if (this.ws !== currentWs) {
+                currentWs.close();
+                return;
+            }
             this.reconnectAttempts = 0;
             this.setStatus("open");
             this.startPing();
         };
-        this.ws.onmessage = (e) => {
+        currentWs.onmessage = (e) => {
+            if (this.ws !== currentWs)
+                return;
             try {
                 const msg = JSON.parse(e.data);
                 if (msg.type === "ping") {
@@ -77,7 +90,10 @@ export class GameWebSocket {
                 // Ignore unparseable messages
             }
         };
-        this.ws.onclose = (e) => {
+        currentWs.onclose = (e) => {
+            console.log("[WS onclose]", { code: e.code, reason: e.reason, isCurrent: this.ws === currentWs, intentional: this.intentionallyClosed });
+            if (this.ws !== currentWs)
+                return;
             this.stopPing();
             this.setStatus("closed");
             // 4001: Unauthorised, 4002: Cannot join, 4003: Game in progress, 4004: Invalid state
@@ -89,7 +105,9 @@ export class GameWebSocket {
                 this.setStatus("error");
             }
         };
-        this.ws.onerror = (e) => {
+        currentWs.onerror = (e) => {
+            if (this.ws !== currentWs)
+                return;
             this.emit("error", e);
         };
     }

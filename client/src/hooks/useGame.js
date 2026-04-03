@@ -47,6 +47,7 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }) {
     const store = useGameStore();
     const navigate = useNavigate();
     const avatarEmoji = store.role === "player" ? store.avatarEmoji : "😀";
+    const isReady = !!roomCode && !!sessionId && !!displayName && !!playerId;
     const onMessage = useRef((msg) => {
         if (msg.type === "kicked") {
             navigate("/join?kicked=1");
@@ -79,6 +80,7 @@ export function usePlayerGame({ sessionId, roomCode, displayName, playerId }) {
         playerId,
         avatarEmoji,
         onMessage: (msg) => onMessage.current(msg),
+        enabled: isReady,
     });
     // Persist to localStorage (not sessionStorage) so reconnection survives browser close
     useEffect(() => {
