@@ -166,7 +166,7 @@ function applyServerMessage(prev: GameState, msg: ServerMessage): Partial<GameSt
         currentQuestion: msg.question,
         currentQuestionIndex: msg.questionIndex,
         totalQuestions: msg.totalQuestions,
-        questionStartTime: msg.startTime,
+        questionStartTime: Date.now(),
         timeLimit: msg.timeLimit,
       };
       if (prev.role === "host") {

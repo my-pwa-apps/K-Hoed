@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { Crown, TrendingUp, Minus, TrendingDown } from "lucide-react";
+import { Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import type { LeaderboardEntry } from "@/lib/types";
@@ -7,14 +7,12 @@ import type { LeaderboardEntry } from "@/lib/types";
 interface LeaderboardProps {
   entries: LeaderboardEntry[];
   currentPlayerId?: string;
-  showDelta?: boolean;
   compact?: boolean;
 }
 
 export function Leaderboard({
   entries,
   currentPlayerId,
-  showDelta = true,
   compact = false,
 }: LeaderboardProps) {
   const top = compact ? entries.slice(0, 5) : entries;
@@ -59,11 +57,6 @@ export function Leaderboard({
             {/* Name */}
             <span className="flex-1 truncate text-sm font-semibold">{entry.displayName}</span>
 
-            {/* Delta */}
-            {showDelta && entry.delta !== 0 && (
-              <DeltaBadge delta={entry.delta} />
-            )}
-
             {/* Score */}
             <span className="font-bold tabular-nums text-base shrink-0">
               {entry.score.toLocaleString()}
@@ -78,30 +71,6 @@ export function Leaderboard({
         </p>
       )}
     </div>
-  );
-}
-
-function DeltaBadge({ delta }: { delta: number }) {
-  if (delta === 0)
-    return (
-      <span className="flex items-center gap-0.5 text-gray-400 text-xs">
-        <Minus size={12} />
-        <span>0</span>
-      </span>
-    );
-
-  if (delta > 0)
-    return (
-      <span className="flex items-center gap-0.5 text-emerald-600 text-xs font-semibold">
-        <TrendingUp size={12} />+{delta}
-      </span>
-    );
-
-  return (
-    <span className="flex items-center gap-0.5 text-rose-500 text-xs font-semibold">
-      <TrendingDown size={12} />
-      {delta}
-    </span>
   );
 }
 

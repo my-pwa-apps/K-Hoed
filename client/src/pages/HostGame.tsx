@@ -8,7 +8,6 @@ import { Timer } from "@/components/game/Timer";
 import { Leaderboard, Podium } from "@/components/game/Leaderboard";
 import { AnswerDistribution } from "@/components/game/AnswerDistribution";
 import { GiphyChat } from "@/components/game/GiphyChat";
-import { ReactionOverlay } from "@/components/game/ReactionOverlay";
 import { useGameStore, initHostGame } from "@/stores/gameStore";
 import { useHostGame } from "@/hooks/useGame";
 import { gameApi } from "@/lib/api";
@@ -85,7 +84,6 @@ export default function HostGame() {
 
   return (
     <div className="h-[100dvh] overflow-hidden bg-gradient-to-br from-brand-950 to-brand-800 text-white flex flex-col">
-      <ReactionOverlay />
       {/* Status bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-black/20 shrink-0 gap-2 sm:gap-3">
         <span className="text-xs sm:text-sm font-medium text-white/70 shrink-0">
@@ -376,8 +374,7 @@ export default function HostGame() {
         {/* ── Right: always-visible GIF chat sidebar ── */}
         {phase !== "ended" && (
           <div className="hidden lg:flex w-80 bg-white/5 border-l border-white/10 flex-col shrink-0">
-            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest px-4 pt-4 pb-2">GIF chat</p>
-            <div className="flex-1 min-h-0">
+            <div className="flex-1 min-h-0 px-3 py-3">
               <GiphyChat send={send} variant="host" />
             </div>
           </div>

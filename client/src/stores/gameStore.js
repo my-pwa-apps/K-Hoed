@@ -103,7 +103,7 @@ function applyServerMessage(prev, msg) {
                 currentQuestion: msg.question,
                 currentQuestionIndex: msg.questionIndex,
                 totalQuestions: msg.totalQuestions,
-                questionStartTime: msg.startTime,
+                questionStartTime: Date.now(),
                 timeLimit: msg.timeLimit,
             };
             if (prev.role === "host") {

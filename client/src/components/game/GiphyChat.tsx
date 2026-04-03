@@ -60,6 +60,7 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
   const reactions = useReactionStore((s) => s.reactions);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [caption, setCaption] = useState("");
   const [results, setResults] = useState<GifResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastSent, setLastSent] = useState(0);
@@ -86,11 +87,13 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
     (gif: GifResult) => {
       // Rate-limit: max 1 gif per 3 seconds
       if (Date.now() - lastSent < 3000) return;
-      send({ type: "send_reaction", gifUrl: gif.url, caption: gif.title });
+      const nextCaption = caption.trim();
+      send({ type: "send_reaction", gifUrl: gif.url, caption: nextCaption });
       setLastSent(Date.now());
+      setCaption("");
       setOpen(false);
     },
-    [send, lastSent],
+    [caption, send, lastSent],
   );
 
   const panel = (
@@ -103,13 +106,13 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
         "bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col",
         variant === "player"
           ? "fixed bottom-20 right-4 w-80 z-50 max-h-[70vh]"
-          : "w-full h-full border-0 shadow-none",
+          : "w-full h-full border-0 shadow-none p-4",
       ].join(" ")}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+      <div className={`flex items-center justify-between shrink-0 ${variant === "player" ? "px-4 py-3 border-b border-gray-100" : "px-1 pb-3"}`}>
         <span className="font-semibold text-gray-800 text-sm">
-          {variant === "player" ? t.chat.search_gif : "GIF feed"}
+          {t.chat.search_gif}
         </span>
         {variant === "player" && (
           <button
@@ -125,7 +128,7 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
       {/* For players: Search bar and results grid */}
       {variant === "player" && (
         <>
-          <div className="px-3 py-2 border-b border-gray-100 shrink-0">
+          <div className="px-3 py-3 border-b border-gray-100 shrink-0 space-y-2">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -152,9 +155,15 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
                 <Send size={14} />
               </button>
             </form>
+            <input
+              value={caption}
+              onChange={(e) => setCaption(e.target.value.slice(0, 60))}
+              placeholder={t.chat.caption_placeholder}
+              className="w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400"
+            />
           </div>
 
-          <div className="overflow-y-auto flex-1 p-2">
+          <div className="overflow-y-auto flex-1 p-3">
             {loading && (
               <p className="text-center text-xs text-gray-400 py-4">{t.common.loading}</p>
             )}
@@ -184,22 +193,25 @@ export function GiphyChat({ send, variant = "player" }: GiphyChatProps) {
 
       {/* Recent reactions feed (shows entirely for host without limit, or small bottom strip for player) */}
       {reactions.length > 0 ? (
-        <div className={`px-3 py-2 shrink-0 overflow-y-auto space-y-2 ${variant === "player" ? "border-t border-gray-100 max-h-32" : "flex-1"}`}>
+        <div className={`shrink-0 overflow-y-auto space-y-3 ${variant === "player" ? "border-t border-gray-100 max-h-40 px-3 py-3" : "flex-1 px-1 py-1"}`}>
           {reactions
             .slice()
             .reverse()
             .slice(0, variant === "player" ? 3 : 50)
             .map((r) => (
-              <div key={r.id} className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-xl p-2">
+              <div key={r.id} className="flex items-start gap-3 text-sm text-gray-700 bg-gray-50 rounded-2xl p-3">
                 <PlayerAvatar value={r.avatarEmoji} name={r.displayName} size="sm" />
-                <span className="font-semibold truncate max-w-[80px]">{r.displayName}</span>
-                <img src={r.gifUrl} alt={r.caption} className="h-10 rounded-lg object-cover ml-auto" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="font-semibold truncate">{r.displayName}</div>
+                  {r.caption && <div className="text-xs leading-5 text-gray-500 break-words">{r.caption}</div>}
+                </div>
+                <img src={r.gifUrl} alt={r.caption} className="h-16 w-16 rounded-xl object-cover shrink-0" />
               </div>
             ))}
         </div>
       ) : (
         variant === "host" && (
-           <p className="text-center text-xs text-gray-400 py-4">No GIFs sent yet</p>
+           <p className="text-center text-xs text-gray-400 py-4">{t.chat.no_gifs}</p>
         )
       )}
     </motion.div>

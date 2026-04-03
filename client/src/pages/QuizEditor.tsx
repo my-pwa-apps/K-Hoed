@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { quizApi, uploadApi, brainstormApi } from "@/lib/api";
 import type { QuestionType, QuestionConfig, SliderConfig, PinAnswerConfig, MediaClipConfig, BrainstormItem, BrainstormStatus } from "@/lib/types";
 import { newLocalId } from "@/pages/QuizEditor.utils";
+import { useI18n, interp } from "@/i18n";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,12 +60,26 @@ function createBrainstormItem(): BrainstormItem {
   };
 }
 
+const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  classic: "Single answer",
+  multiple: "Multiple answers",
+  truefalse: "True / False",
+  typeanswer: "Type answer",
+  slider: "Slider",
+  puzzle: "Puzzle",
+  pinanswer: "Pin answer",
+  audioclip: "Song clip",
+  videoclip: "Video clip",
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function QuizEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { t } = useI18n();
+  const te = t.editor;
   const isNew = !id;
 
   const [title, setTitle] = useState("");
@@ -326,7 +341,7 @@ export default function QuizEditor() {
   );
 
   if (!isNew && isLoading) {
-    return <div className="text-gray-400 text-center py-20">Loading quiz…</div>;
+    return <div className="text-gray-400 text-center py-20">{te.loading_quiz}</div>;
   }
 
   const canSave =
@@ -340,25 +355,62 @@ export default function QuizEditor() {
       ));
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-display font-bold text-gray-900">
-          {isNew ? "New quiz" : "Edit quiz"}
-        </h1>
-        <div className="flex gap-3">
-          <Button variant="ghost" onClick={() => navigate("/quizzes")}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            loading={saveMutation.isPending}
-            disabled={!canSave}
-          >
-            {isNew ? "Create quiz" : "Save changes"}
-          </Button>
+    <div className="max-w-6xl mx-auto space-y-6 pb-10">
+      <Card className="overflow-hidden border-0 bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.9),_rgba(255,251,235,0.98)_42%,_rgba(238,242,255,1)_100%)] shadow-[0_24px_80px_rgba(79,98,245,0.12)]">
+        <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr] items-start">
+          <div className="space-y-5">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/85 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-brand-700 shadow-sm">
+              <Lightbulb size={14} /> {te.admin_studio}
+            </div>
+            <div className="space-y-3">
+              <h1 className="text-3xl sm:text-5xl font-display font-bold leading-none text-gray-900">
+                {isNew ? te.new_hero : te.edit_hero}
+              </h1>
+              <p className="max-w-3xl text-sm sm:text-base leading-7 text-gray-600">
+                {te.hero_sub}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+              <span className="rounded-full bg-white px-3 py-1.5 text-gray-600 shadow-sm">{interp(te.questions_count, { n: questions.length })}</span>
+              <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{interp(te.active_ideas, { n: brainstormCounts.proposed + brainstormCounts.shortlisted })}</span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700">{interp(te.converted, { n: brainstormCounts.added })}</span>
+            </div>
+          </div>
+
+          <div className="rounded-[28px] bg-white/85 p-4 shadow-lg shadow-brand-500/10">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{te.publishing_panel}</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-2xl bg-[#eef2ff] px-3 py-4">
+                  <p className="text-2xl font-bold text-brand-700">{questions.length}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-700/70">{te.stat_questions}</p>
+                </div>
+                <div className="rounded-2xl bg-[#fff7ed] px-3 py-4">
+                  <p className="text-2xl font-bold text-amber-700">{brainstorm.length}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700/70">{te.stat_ideas}</p>
+                </div>
+                <div className="rounded-2xl bg-[#ecfeff] px-3 py-4">
+                  <p className="text-2xl font-bold text-cyan-700">{isPublic ? te.public_on : te.public_off}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-cyan-700/70">{te.stat_public}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <Button variant="ghost" onClick={() => navigate("/quizzes")}>
+                  {t.common.cancel}
+                </Button>
+                <Button
+                  onClick={() => saveMutation.mutate()}
+                  loading={saveMutation.isPending}
+                  disabled={!canSave}
+                  className="shadow-lg shadow-brand-500/20"
+                >
+                  {isNew ? t.quiz.new_quiz : t.quiz.save}
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </Card>
 
       {saveError && (
         <p role="alert" className="text-sm text-danger-500">
@@ -367,18 +419,22 @@ export default function QuizEditor() {
       )}
 
       {/* Quiz meta */}
-      <Card>
-        <div className="space-y-4">
+      <Card className="border-0 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{te.quiz_setup}</p>
+            <h2 className="mt-2 text-2xl font-display font-bold text-gray-900">{te.quiz_setup_sub}</h2>
+          </div>
           <Input
-            label="Quiz title"
+            label={t.quiz.title_label}
             required
-            placeholder="e.g. General Knowledge Round"
+            placeholder={t.quiz.title_placeholder}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
           <Textarea
-            label="Description (optional)"
-            placeholder="A short description of the quiz"
+            label={t.quiz.description_label}
+            placeholder={t.quiz.description_label}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
@@ -390,23 +446,22 @@ export default function QuizEditor() {
               className="w-4 h-4 accent-brand-500"
             />
             <span className="text-sm font-medium text-gray-700">
-              Make quiz publicly discoverable
+              {te.make_public}
             </span>
           </label>
         </div>
       </Card>
 
-      <Card className="border border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+      <Card className="border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-[#fff7ed] shadow-[0_18px_50px_rgba(245,158,11,0.10)]">
         <div className="space-y-5">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
               <div className="flex items-center gap-2 text-amber-700 mb-1">
                 <Lightbulb size={18} />
-                <h2 className="font-display font-bold text-xl text-gray-900">Brainstorm area</h2>
+                <h2 className="font-display font-bold text-xl text-gray-900">{te.brainstorm_title}</h2>
               </div>
               <p className="text-sm text-gray-600 max-w-2xl">
-                Park ideas here before they become real quiz questions. Shortlist the strongest ones,
-                then move them into the game when you are ready.
+                {te.brainstorm_sub}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -420,18 +475,18 @@ export default function QuizEditor() {
                   title="Copy a link that anyone can use to add brainstorm ideas — no account needed"
                 >
                   {inviteCopied ? <RefreshCw size={14} className="text-emerald-600" /> : <Link2 size={14} />}
-                  {inviteCopied ? "Link copied!" : "Invite to brainstorm"}
+                  {inviteCopied ? te.link_copied : te.invite_brainstorm}
                 </Button>
               )}
               <div className="flex flex-wrap gap-2 text-xs font-semibold">
                 <span className="px-2.5 py-1 rounded-full bg-white border border-gray-200 text-gray-600">
-                  {brainstormCounts.proposed} proposed
+                  {brainstormCounts.proposed} {te.proposed}
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">
-                  {brainstormCounts.shortlisted} shortlisted
+                  {brainstormCounts.shortlisted} {te.shortlisted}
                 </span>
                 <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                  {brainstormCounts.added} added to quiz
+                  {brainstormCounts.added} {te.added_to_quiz}
                 </span>
               </div>
             </div>
@@ -439,7 +494,7 @@ export default function QuizEditor() {
 
           {brainstorm.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-amber-300 bg-white/70 p-6 text-center text-sm text-gray-500">
-              No ideas yet. Start capturing rough question prompts, funny twists, or topics to agree on later.
+              {te.brainstorm_empty}
             </div>
           ) : (
             <div className="space-y-4">
@@ -450,10 +505,10 @@ export default function QuizEditor() {
                       <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center">
                         {index + 1}
                       </span>
-                      Idea
+                      {te.idea}
                       {item.suggested_by && (
                         <span className="text-xs font-normal text-brand-500 ml-1">
-                          · suggested by {item.suggested_by}
+                          · {interp(te.suggested_by, { name: item.suggested_by })}
                         </span>
                       )}
                     </div>
@@ -464,9 +519,9 @@ export default function QuizEditor() {
                         onChange={(e) => updateBrainstormItem(index, { status: e.target.value as BrainstormStatus })}
                         aria-label={`Brainstorm status ${index + 1}`}
                       >
-                        <option value="proposed">Proposed</option>
-                        <option value="shortlisted">Shortlisted</option>
-                        <option value="added">Added to quiz</option>
+                        <option value="proposed">{te.status_proposed}</option>
+                        <option value="shortlisted">{te.status_shortlisted}</option>
+                        <option value="added">{te.status_added}</option>
                       </select>
                       <Button
                         type="button"
@@ -476,7 +531,7 @@ export default function QuizEditor() {
                         disabled={!item.text.trim()}
                       >
                         {item.status === "added" ? <CheckCircle2 size={14} /> : <ArrowRight size={14} />}
-                        {item.status === "added" ? "Question created" : "Turn into question"}
+                        {item.status === "added" ? te.question_created : te.turn_into_question}
                       </Button>
                       <Button
                         type="button"
@@ -491,22 +546,22 @@ export default function QuizEditor() {
                   </div>
 
                   <Input
-                    label="Idea"
-                    placeholder="e.g. Should we do a round about weird Dutch traditions?"
+                    label={te.idea_label}
+                    placeholder={te.idea_placeholder}
                     value={item.text}
                     onChange={(e) => updateBrainstormItem(index, { text: e.target.value })}
                   />
 
                   <div className="grid sm:grid-cols-[minmax(0,1fr)_180px] gap-3">
                     <Textarea
-                      label="Notes"
-                      placeholder="Add angle, possible answers, jokes, or concerns to discuss later"
+                      label={te.notes_label}
+                      placeholder={te.notes_placeholder}
                       value={item.notes ?? ""}
                       onChange={(e) => updateBrainstormItem(index, { notes: e.target.value || null })}
                     />
                     <Input
-                      label="Suggested by"
-                      placeholder="Name"
+                      label={te.suggested_by_label}
+                      placeholder={te.name_placeholder}
                       value={item.suggested_by ?? ""}
                       onChange={(e) => updateBrainstormItem(index, { suggested_by: e.target.value || null })}
                     />
@@ -517,13 +572,21 @@ export default function QuizEditor() {
           )}
 
           <Button type="button" variant="outline" onClick={addBrainstormItemRow}>
-            <Plus size={16} /> Add brainstorm idea
+            <Plus size={16} /> {te.add_brainstorm_idea}
           </Button>
         </div>
       </Card>
 
       {/* Questions */}
       <div className="space-y-4">
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{te.question_flow}</p>
+            <h2 className="mt-2 text-2xl font-display font-bold text-gray-900">{te.question_flow_title}</h2>
+            <p className="mt-1 text-sm text-gray-500">{te.question_flow_sub}</p>
+          </div>
+        </div>
+
         {questions.map((q, qi) => (
           <QuestionCard
             key={q.id}
@@ -541,11 +604,11 @@ export default function QuizEditor() {
 
         <button
           onClick={addQuestion}
-          className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-6
-                     text-gray-400 hover:text-brand-600 hover:border-brand-400 transition-colors
-                     flex items-center justify-center gap-2 font-medium"
+          className="w-full rounded-[28px] border-2 border-dashed border-brand-200 bg-gradient-to-br from-white to-brand-50/40 p-8
+                     text-brand-500 hover:text-brand-700 hover:border-brand-400 transition-colors
+                     flex items-center justify-center gap-2 font-semibold"
         >
-          <Plus size={20} /> Add question
+          <Plus size={20} /> {te.add_question}
         </button>
       </div>
     </div>
@@ -579,6 +642,9 @@ function QuestionCard({
 }: QuestionCardProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const { t } = useI18n();
+  const te = t.editor;
+  const typeLabel = QUESTION_TYPE_LABELS[q.type];
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -606,18 +672,26 @@ function QuestionCard({
   const borderColor = questionColors[index % questionColors.length];
 
   return (
-    <Card className={`border-l-4 ${borderColor}`}>
+    <Card className={`border-l-4 ${borderColor} shadow-[0_18px_40px_rgba(15,23,42,0.05)]`}>
       {/* Header row */}
       <div className="flex items-start gap-3 mb-4">
         <div className="p-1.5 text-gray-300 cursor-grab mt-1" aria-hidden>
           <GripVertical size={16} />
         </div>
-        <span className="text-sm font-bold text-gray-400 mt-2.5 shrink-0">Q{index + 1}</span>
-        <div className="flex-1">
+        <div className="mt-1 shrink-0 rounded-2xl bg-gray-100 px-3 py-2 text-sm font-bold text-gray-500">Q{index + 1}</div>
+        <div className="flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-brand-50 px-2.5 py-1 text-brand-700">{typeLabel}</span>
+            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-gray-600">{q.time_limit}s</span>
+            <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">{q.points} pts</span>
+            {q.answer_options.length > 0 && (
+              <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">{q.answer_options.length} choices</span>
+            )}
+          </div>
           <textarea
             className="input resize-none text-base font-medium"
             rows={2}
-            placeholder="Your question…"
+            placeholder={te.your_question}
             value={q.text}
             onChange={(e) => onUpdate({ text: e.target.value })}
             aria-label={`Question ${index + 1} text`}
@@ -642,31 +716,33 @@ function QuestionCard({
       {q._expanded && (
         <div className="space-y-4 pl-10">
           {/* Settings row */}
+          <div className="rounded-2xl bg-gray-50 p-4">
+          <div className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{te.question_settings}</div>
           <div className="flex flex-wrap gap-3">
             {/* Type */}
             <div>
-              <label className="label text-xs">Type</label>
+              <label className="label text-xs">{te.type_label}</label>
               <select
                 className="input py-2 text-sm"
                 value={q.type}
                 onChange={(e) => onChangeType(e.target.value as QuestionType)}
-                aria-label="Question type"
+                aria-label={te.type_label}
               >
-                <option value="classic">Single answer</option>
-                <option value="multiple">Multiple answers</option>
-                <option value="truefalse">True / False</option>
-                <option value="typeanswer">Type answer</option>
-                <option value="slider">Slider</option>
-                <option value="puzzle">Puzzle (order)</option>
-                <option value="pinanswer">Pin answer</option>
-                <option value="audioclip">🎵 Song clip</option>
-                <option value="videoclip">🎬 Video / movie clip</option>
+                <option value="classic">{t.quiz.type_classic}</option>
+                <option value="multiple">{t.quiz.type_multiple}</option>
+                <option value="truefalse">{t.quiz.type_truefalse}</option>
+                <option value="typeanswer">{t.quiz.type_typeanswer}</option>
+                <option value="slider">{t.quiz.type_slider}</option>
+                <option value="puzzle">{t.quiz.type_puzzle}</option>
+                <option value="pinanswer">{t.quiz.type_pinanswer}</option>
+                <option value="audioclip">🎵 {t.quiz.type_classic === "Single answer" ? "Song clip" : "Songclip"}</option>
+                <option value="videoclip">🎬 {t.quiz.type_classic === "Single answer" ? "Video / movie clip" : "Video / filmclip"}</option>
               </select>
             </div>
 
             {/* Timer */}
             <div>
-              <label className="label text-xs">Time (s)</label>
+              <label className="label text-xs">{te.time_label}</label>
               <select
                 className="input py-2 text-sm"
                 value={q.time_limit}
@@ -683,7 +759,7 @@ function QuestionCard({
 
             {/* Points */}
             <div>
-              <label className="label text-xs">Points</label>
+              <label className="label text-xs">{te.points_label}</label>
               <select
                 className="input py-2 text-sm"
                 value={q.points}
@@ -698,9 +774,11 @@ function QuestionCard({
               </select>
             </div>
           </div>
+          </div>
 
           {/* Image */}
-          <div>
+          <div className="rounded-2xl bg-white border border-gray-100 p-4">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{te.visual_prompt}</div>
             {q.image_url ? (
               <div className="relative inline-block">
                 <img
@@ -727,11 +805,11 @@ function QuestionCard({
                 />
                 {uploading ? (
                   <span className="flex items-center gap-2">
-                    <Upload size={16} className="animate-spin" /> Uploading…
+                    <Upload size={16} className="animate-spin" /> {te.uploading}
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <Image size={16} /> Add image (optional)
+                    <Image size={16} /> {te.add_image}
                   </span>
                 )}
               </label>
@@ -744,32 +822,32 @@ function QuestionCard({
           {/* Answers section — varies by type */}
           {q.type === "slider" && (
             <div className="space-y-3 bg-gray-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Slider config</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{te.slider_config}</p>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="label text-xs">Min</label>
+                  <label className="label text-xs">{te.slider_min}</label>
                   <input type="number" title="Slider minimum value" className="input py-2 text-sm" value={(q.config as SliderConfig | null)?.min ?? 0}
                     onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), min: Number(e.target.value) } })} />
                 </div>
                 <div>
-                  <label className="label text-xs">Max</label>
+                  <label className="label text-xs">{te.slider_max}</label>
                   <input type="number" title="Slider maximum value" className="input py-2 text-sm" value={(q.config as SliderConfig | null)?.max ?? 100}
                     onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), max: Number(e.target.value) } })} />
                 </div>
                 <div>
-                  <label className="label text-xs">Step</label>
+                  <label className="label text-xs">{te.slider_step}</label>
                   <input type="number" title="Slider step value" className="input py-2 text-sm" min={0.01} value={(q.config as SliderConfig | null)?.step ?? 1}
                     onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), step: Number(e.target.value) } })} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="label text-xs">Correct answer</label>
+                  <label className="label text-xs">{te.slider_correct}</label>
                   <input type="number" title="Slider correct value" className="input py-2 text-sm border-emerald-400 bg-emerald-50" value={(q.config as SliderConfig | null)?.correct ?? 50}
                     onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), correct: Number(e.target.value) } })} />
                 </div>
                 <div>
-                  <label className="label text-xs">Tolerance (±)</label>
+                  <label className="label text-xs">{te.slider_tolerance}</label>
                   <input type="number" title="Slider tolerance value" className="input py-2 text-sm" min={0} value={(q.config as SliderConfig | null)?.tolerance ?? 5}
                     onChange={(e) => onUpdate({ config: { ...(q.config as SliderConfig), tolerance: Number(e.target.value) } })} />
                 </div>
@@ -779,7 +857,7 @@ function QuestionCard({
 
           {q.type === "pinanswer" && (
             <div className="space-y-3 bg-gray-50 rounded-xl p-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pin answer — click image to set hotspot</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{te.pin_config}</p>
               {q.image_url ? (
                 <div className="space-y-2">
                   <div
@@ -807,7 +885,7 @@ function QuestionCard({
                     )}
                   </div>
                   <div>
-                    <label className="label text-xs">Hotspot radius (fraction of image width: 0.02–0.4)</label>
+                    <label className="label text-xs">{te.pin_radius}</label>
                     <input type="range" title="Pin answer hotspot radius" min={0.02} max={0.4} step={0.01}
                       className="w-full accent-brand-500"
                       value={(q.config as PinAnswerConfig | null)?.hotspotRadius ?? 0.1}
@@ -815,7 +893,7 @@ function QuestionCard({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-amber-600">⚠️ Upload an image above, then click it to set the correct hotspot.</p>
+                <p className="text-sm text-amber-600">⚠️ {te.pin_upload_first}</p>
               )}
             </div>
           )}
@@ -824,26 +902,26 @@ function QuestionCard({
           {(q.type === "audioclip" || q.type === "videoclip") && (
             <div className="space-y-3 bg-gray-50 rounded-xl p-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                {q.type === "audioclip" ? "🎵 Song clip config" : "🎬 Video / movie clip config"}
+                {q.type === "audioclip" ? `🎵 ${te.song_clip_config}` : `🎬 ${te.video_clip_config}`}
               </p>
               <div>
-                <label className="label text-xs">Media URL (YouTube, MP3, MP4…)</label>
+                <label className="label text-xs">{te.media_url_label}</label>
                 <input
                   type="url"
                   title="Media URL"
                   className="input py-2 text-sm"
-                  placeholder="https://youtube.com/watch?v=…"
+                  placeholder={te.media_url_placeholder}
                   value={(q.config as MediaClipConfig | null)?.mediaUrl ?? ""}
                   onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), mediaUrl: e.target.value } })}
                 />
               </div>
               <div>
-                <label className="label text-xs">{q.type === "audioclip" ? "Correct song title" : "Correct movie / series title"}</label>
+                <label className="label text-xs">{q.type === "audioclip" ? te.correct_song_title : te.correct_movie_title}</label>
                 <input
                   type="text"
                   title="Correct title"
                   className="input py-2 text-sm border-emerald-400 bg-emerald-50"
-                  placeholder={q.type === "audioclip" ? "Song title" : "Movie or series title"}
+                  placeholder={q.type === "audioclip" ? te.song_title_placeholder : te.movie_title_placeholder}
                   value={(q.config as MediaClipConfig | null)?.songTitle ?? ""}
                   onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), songTitle: e.target.value } })}
                 />
@@ -851,19 +929,19 @@ function QuestionCard({
               {q.type === "audioclip" && (
                 <>
                   <div>
-                    <label className="label text-xs">Artist name (optional — bonus points)</label>
+                    <label className="label text-xs">{te.artist_label}</label>
                     <input
                       type="text"
                       title="Artist name"
                       className="input py-2 text-sm"
-                      placeholder="Leave blank to skip artist bonus"
+                      placeholder={te.artist_placeholder}
                       value={(q.config as MediaClipConfig | null)?.songArtist ?? ""}
                       onChange={(e) => onUpdate({ config: { ...(q.config as MediaClipConfig), songArtist: e.target.value } })}
                     />
                   </div>
                   {(q.config as MediaClipConfig | null)?.songArtist && (
                     <div>
-                      <label className="label text-xs">Artist bonus points</label>
+                      <label className="label text-xs">{te.artist_points_label}</label>
                       <input
                         type="number"
                         title="Artist bonus points"
@@ -884,10 +962,10 @@ function QuestionCard({
           {q.type !== "slider" && q.type !== "pinanswer" && q.type !== "audioclip" && q.type !== "videoclip" && (
           <div className="space-y-2">
             {q.type === "typeanswer" && (
-              <p className="text-xs text-gray-500">Acceptable answers — player’s text must match one (case-insensitive).</p>
+              <p className="text-xs text-gray-500">{te.typeanswer_hint}</p>
             )}
             {q.type === "puzzle" && (
-              <p className="text-xs text-gray-500">Items in order shown here — players will see them shuffled.</p>
+              <p className="text-xs text-gray-500">{te.puzzle_hint}</p>
             )}
             {q.answer_options.map((a, ai) => (
               <div key={a.id} className="flex items-center gap-2">
@@ -914,7 +992,7 @@ function QuestionCard({
                       ? "border-emerald-400 bg-emerald-50"
                       : q.type === "typeanswer" ? "border-emerald-400 bg-emerald-50" : ""
                   }`}
-                  placeholder={q.type === "typeanswer" ? `Acceptable answer ${ai + 1}` : q.type === "puzzle" ? `Item ${ai + 1}` : `Answer ${ai + 1}`}
+                  placeholder={q.type === "typeanswer" ? interp(te.acceptable_answer, { n: ai + 1 }) : q.type === "puzzle" ? interp(te.puzzle_item, { n: ai + 1 }) : interp(te.answer_n, { n: ai + 1 })}
                   value={a.text}
                   onChange={(e) => onUpdateAnswer(ai, { text: e.target.value })}
                   readOnly={q.type === "truefalse"}
@@ -934,7 +1012,7 @@ function QuestionCard({
             {q.type !== "truefalse" && q.answer_options.length < (q.type === "typeanswer" ? 5 : 6) && (
               <button onClick={onAddAnswer}
                 className="text-sm text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
-                <Plus size={14} /> {q.type === "typeanswer" ? "Add acceptable answer" : q.type === "puzzle" ? "Add item" : "Add option"}
+                <Plus size={14} /> {q.type === "typeanswer" ? te.add_acceptable_answer : q.type === "puzzle" ? te.add_puzzle_item : te.add_option}
               </button>
             )}
           </div>

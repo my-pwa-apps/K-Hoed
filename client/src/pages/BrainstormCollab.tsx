@@ -6,11 +6,14 @@ import type { BrainstormItem } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
+import { useI18n, interp } from "@/i18n";
 
 const POLL_INTERVAL_MS = 10_000;
 
 export default function BrainstormCollab() {
   const { token } = useParams<{ token: string }>();
+  const { t } = useI18n();
+  const tb = t.brainstorm;
 
   const [quizTitle, setQuizTitle] = useState<string | null>(null);
   const [items, setItems] = useState<BrainstormItem[]>([]);
@@ -86,10 +89,10 @@ export default function BrainstormCollab() {
       <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6">
         <Card className="max-w-md w-full text-center space-y-3">
           <Lightbulb size={40} className="mx-auto text-amber-400" />
-          <h1 className="text-xl font-display font-bold text-gray-900">Brainstorm not found</h1>
+          <h1 className="text-xl font-display font-bold text-gray-900">{tb.not_found_title}</h1>
           <p className="text-sm text-gray-500">{loadError}</p>
           <p className="text-sm text-gray-400">
-            The invite link may have been revoked by the quiz owner.
+            {tb.not_found_sub}
           </p>
         </Card>
       </div>
@@ -109,47 +112,50 @@ export default function BrainstormCollab() {
   const added = items.filter((i) => i.status === "added");
 
   return (
-    <div className="min-h-screen bg-brand-900 py-10 px-4">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,226,173,0.18),_transparent_28%),linear-gradient(180deg,#172554_0%,#1e3a8a_45%,#172554_100%)] py-10 px-4">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="text-center space-y-1">
+        <div className="rounded-[32px] bg-white/10 backdrop-blur-sm border border-white/10 px-6 py-8 text-center space-y-2 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
           <div className="flex items-center justify-center gap-2 text-amber-300 mb-2">
             <Lightbulb size={28} />
-            <span className="text-sm font-semibold uppercase tracking-widest">Brainstorm</span>
+            <span className="text-sm font-semibold uppercase tracking-widest">{tb.header}</span>
           </div>
-          <h1 className="text-3xl font-display font-bold text-white">{quizTitle}</h1>
-          <p className="text-sm text-brand-300">
-            Add your question ideas below. They'll appear in the quiz editor for the owner to review.
+          <h1 className="text-3xl sm:text-5xl font-display font-bold text-white">{quizTitle}</h1>
+          <p className="max-w-2xl mx-auto text-sm sm:text-base leading-7 text-brand-100/80">
+            {tb.sub}
           </p>
           {lastUpdated && (
             <p className="text-xs text-brand-400">
-              Last updated {lastUpdated.toLocaleTimeString()} · auto-refreshes every 10 s
+              {interp(tb.last_updated, { time: lastUpdated.toLocaleTimeString() })}
             </p>
           )}
         </div>
 
         {/* Add idea form */}
-        <Card>
+        <Card className="border-0 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
           <form onSubmit={handleSubmit} className="space-y-4">
-            <h2 className="font-display font-bold text-gray-900 text-lg">Add an idea</h2>
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gray-400">{tb.co_create}</p>
+              <h2 className="font-display font-bold text-gray-900 text-2xl">{tb.add_idea_title}</h2>
+            </div>
 
             <Input
-              label="Your name"
+              label={tb.your_name}
               required
-              placeholder="e.g. Sofia"
+              placeholder={tb.name_placeholder}
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
             <Input
-              label="Idea / question topic"
+              label={tb.idea_label}
               required
-              placeholder="e.g. What is the capital of Belgium?"
+              placeholder={tb.idea_placeholder}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
             <Textarea
-              label="Notes (optional)"
-              placeholder="Context, source, why it's a good question…"
+              label={tb.notes_label}
+              placeholder={tb.notes_placeholder}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
             />
@@ -158,7 +164,7 @@ export default function BrainstormCollab() {
               <p className="text-sm text-danger-500" role="alert">{submitError}</p>
             )}
             {submitSuccess && (
-              <p className="text-sm text-emerald-600 font-medium">Idea added!</p>
+              <p className="text-sm text-emerald-600 font-medium">{tb.idea_added}</p>
             )}
 
             <Button
@@ -168,27 +174,27 @@ export default function BrainstormCollab() {
               fullWidth
             >
               <Plus size={16} />
-              Add to brainstorm
+              {tb.add_to_brainstorm}
             </Button>
           </form>
         </Card>
 
         {/* Ideas board */}
         {items.length === 0 ? (
-          <Card className="text-center text-gray-400 text-sm py-8">
-            No ideas yet — be the first to add one!
+          <Card className="text-center text-gray-400 text-sm py-8 border-0 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+            {tb.no_ideas}
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3 items-start">
             {[
-              { label: "Proposed", list: proposed, bg: "bg-white", badge: "bg-gray-100 text-gray-600" },
-              { label: "Shortlisted", list: shortlisted, bg: "bg-amber-50", badge: "bg-amber-100 text-amber-800" },
-              { label: "Added to quiz", list: added, bg: "bg-emerald-50", badge: "bg-emerald-100 text-emerald-700" },
+              { label: tb.proposed, list: proposed, bg: "bg-white", badge: "bg-gray-100 text-gray-600" },
+              { label: tb.shortlisted, list: shortlisted, bg: "bg-amber-50", badge: "bg-amber-100 text-amber-800" },
+              { label: tb.added, list: added, bg: "bg-emerald-50", badge: "bg-emerald-100 text-emerald-700" },
             ]
               .filter(({ list }) => list.length > 0)
               .map(({ label, list, bg, badge }) => (
-                <div key={label}>
-                  <div className="flex items-center gap-2 mb-2">
+                <div key={label} className="rounded-[28px] bg-white/10 backdrop-blur-sm border border-white/10 p-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badge}`}>
                       {label} · {list.length}
                     </span>
@@ -197,7 +203,7 @@ export default function BrainstormCollab() {
                     {list.map((item) => (
                       <div
                         key={item.id}
-                        className={`rounded-2xl border border-amber-200 ${bg} px-4 py-3 flex gap-3 items-start`}
+                        className={`rounded-2xl border border-amber-200 ${bg} px-4 py-3 flex gap-3 items-start shadow-sm`}
                       >
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 break-words">{item.text}</p>

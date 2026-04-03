@@ -363,20 +363,21 @@ export class GameRoom implements DurableObject {
       // If reconnecting during revealing or leaderboard, send their past answer result
       if (isReconnect && (this.phase === "revealing" || this.phase === "leaderboard")) {
         const sub = this.submissions.get(q.id)?.find(s => s.playerId === playerId);
+        const reconnectScore = this.players.get(playerId)?.score ?? 0;
         if (sub) {
           this.sendTo(ws, {
             type: "answer_result",
-            correct: sub.scoreDelta > 0,
-            points: sub.scoreDelta,
-            streak: 0,
+            correct: sub.isCorrect,
+            pointsEarned: sub.pointsEarned,
+            totalScore: reconnectScore,
           });
         } else {
           // Send 0 points if they didn't answer
           this.sendTo(ws, {
             type: "answer_result",
             correct: false,
-            points: 0,
-            streak: 0,
+            pointsEarned: 0,
+            totalScore: reconnectScore,
           });
         }
       }

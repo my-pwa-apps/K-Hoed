@@ -1,13 +1,20 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { motion, AnimatePresence } from "framer-motion";
-import { Crown } from "lucide-react";
+import { Crown, TrendingUp, Minus, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
-export function Leaderboard({ entries, currentPlayerId, compact = false, }) {
+export function Leaderboard({ entries, currentPlayerId, showDelta = true, compact = false, }) {
     const top = compact ? entries.slice(0, 5) : entries;
     return (_jsxs("div", { className: "w-full space-y-2", children: [_jsx(AnimatePresence, { mode: "popLayout", children: top.map((entry, i) => (_jsxs(motion.div, { layout: true, initial: { opacity: 0, x: -20, scale: 0.95 }, animate: { opacity: 1, x: 0, scale: 1 }, exit: { opacity: 0, scale: 0.9 }, transition: { delay: i * 0.05, type: "spring", stiffness: 300, damping: 30 }, className: cn("flex items-center gap-3 rounded-2xl px-4 py-3 font-medium", entry.playerId === currentPlayerId
                         ? "bg-brand-100 border-2 border-brand-400 text-brand-900"
-                        : "bg-white border border-gray-100 shadow-sm text-gray-800", i === 0 && "bg-amber-50 border-amber-300"), children: [_jsx("div", { className: "w-8 shrink-0 text-center", children: i === 0 ? (_jsx(Crown, { className: "text-amber-500 mx-auto", size: 20 })) : (_jsxs("span", { className: "text-sm font-bold text-gray-500", children: ["#", entry.rank] })) }), _jsx(PlayerAvatar, { value: entry.avatarEmoji ?? "", playerId: entry.playerId, name: entry.displayName, size: "md", "aria-hidden": true }), _jsx("span", { className: "flex-1 truncate text-sm font-semibold", children: entry.displayName }), _jsx("span", { className: "font-bold tabular-nums text-base shrink-0", children: entry.score.toLocaleString() })] }, entry.playerId))) }), compact && entries.length > 5 && (_jsxs("p", { className: "text-center text-sm text-gray-500", children: ["+", entries.length - 5, " more players"] }))] }));
+                        : "bg-white border border-gray-100 shadow-sm text-gray-800", i === 0 && "bg-amber-50 border-amber-300"), children: [_jsx("div", { className: "w-8 shrink-0 text-center", children: i === 0 ? (_jsx(Crown, { className: "text-amber-500 mx-auto", size: 20 })) : (_jsxs("span", { className: "text-sm font-bold text-gray-500", children: ["#", entry.rank] })) }), _jsx(PlayerAvatar, { value: entry.avatarEmoji ?? "", playerId: entry.playerId, name: entry.displayName, size: "md", "aria-hidden": true }), _jsx("span", { className: "flex-1 truncate text-sm font-semibold", children: entry.displayName }), showDelta && entry.delta !== 0 && (_jsx(DeltaBadge, { delta: entry.delta })), _jsx("span", { className: "font-bold tabular-nums text-base shrink-0", children: entry.score.toLocaleString() })] }, entry.playerId))) }), compact && entries.length > 5 && (_jsxs("p", { className: "text-center text-sm text-gray-500", children: ["+", entries.length - 5, " more players"] }))] }));
+}
+function DeltaBadge({ delta }) {
+    if (delta === 0)
+        return (_jsxs("span", { className: "flex items-center gap-0.5 text-gray-400 text-xs", children: [_jsx(Minus, { size: 12 }), _jsx("span", { children: "0" })] }));
+    if (delta > 0)
+        return (_jsxs("span", { className: "flex items-center gap-0.5 text-emerald-600 text-xs font-semibold", children: [_jsx(TrendingUp, { size: 12 }), "+", delta] }));
+    return (_jsxs("span", { className: "flex items-center gap-0.5 text-rose-500 text-xs font-semibold", children: [_jsx(TrendingDown, { size: 12 }), delta] }));
 }
 /** Podium display for the top-3 at game end */
 export function Podium({ entries }) {

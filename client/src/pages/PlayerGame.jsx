@@ -16,6 +16,8 @@ interface LocationState {
   roomCode: string;
 }
 
+import { MediaEmbed } from "@/components/game/MediaEmbed";
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PlayerGame() {
@@ -189,7 +191,6 @@ export default function PlayerGame() {
   const isClassicType = currentQuestion?.type === "classic" ||
     currentQuestion?.type === "multiple" ||
     currentQuestion?.type === "truefalse";
-  const isSharedMediaQuestion = currentQuestion?.type === "audioclip" || currentQuestion?.type === "videoclip";
 
   if (store.role !== "player") return null;
 
@@ -258,11 +259,12 @@ export default function PlayerGame() {
                   className="max-h-28 mx-auto rounded-xl object-cover"
                 />
               )}
-              {isSharedMediaQuestion && currentQuestion.mediaUrl && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900">
-                  <p className="font-semibold">{t.player_game.watch_main_screen_title}</p>
-                  <p className="mt-1 text-amber-800">{t.player_game.watch_main_screen_body}</p>
-                </div>
+              {/* Media embed for audioclip / videoclip */}
+              {(currentQuestion.type === "audioclip" || currentQuestion.type === "videoclip") && currentQuestion.mediaUrl && (
+                <MediaEmbed
+                  url={currentQuestion.mediaUrl}
+                  type={currentQuestion.type}
+                />
               )}
             </div>
 
@@ -495,14 +497,14 @@ export default function PlayerGame() {
                     {lastResult.correct && (
                       <p className="text-2xl font-bold text-brand-600 mt-2">
                         {interp(t.player_game.plus_pts, {
-                          pts: (lastResult.pointsEarned ?? 0).toLocaleString(),
+                          pts: lastResult.pointsEarned.toLocaleString(),
                         })}
                       </p>
                     )}
                   </div>
                   <p className="text-gray-500 font-medium">
                     {interp(t.player_game.total_score, {
-                      score: (lastResult.totalScore ?? totalScore ?? 0).toLocaleString(),
+                      score: lastResult.totalScore.toLocaleString(),
                     })}
                   </p>
                 </>

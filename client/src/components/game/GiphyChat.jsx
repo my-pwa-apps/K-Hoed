@@ -35,7 +35,6 @@ export function GiphyChat({ send, variant = "player" }) {
     const reactions = useReactionStore((s) => s.reactions);
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
-    const [caption, setCaption] = useState("");
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [lastSent, setLastSent] = useState(0);
@@ -60,25 +59,23 @@ export function GiphyChat({ send, variant = "player" }) {
         // Rate-limit: max 1 gif per 3 seconds
         if (Date.now() - lastSent < 3000)
             return;
-        const nextCaption = caption.trim();
-        send({ type: "send_reaction", gifUrl: gif.url, caption: nextCaption });
+        send({ type: "send_reaction", gifUrl: gif.url, caption: gif.title });
         setLastSent(Date.now());
-        setCaption("");
         setOpen(false);
-    }, [caption, send, lastSent]);
+    }, [send, lastSent]);
     const panel = (_jsxs(motion.div, { initial: { opacity: 0, scale: 0.92, y: 8 }, animate: { opacity: 1, scale: 1, y: 0 }, exit: { opacity: 0, scale: 0.92, y: 8 }, className: [
             "bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col",
             variant === "player"
                 ? "fixed bottom-20 right-4 w-80 z-50 max-h-[70vh]"
-                : "w-full h-full border-0 shadow-none p-4",
-        ].join(" "), children: [_jsxs("div", { className: `flex items-center justify-between shrink-0 ${variant === "player" ? "px-4 py-3 border-b border-gray-100" : "px-1 pb-3"}`, children: [_jsx("span", { className: "font-semibold text-gray-800 text-sm", children: t.chat.search_gif }), variant === "player" && (_jsx("button", { onClick: () => setOpen(false), "aria-label": "Close", className: "p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100", children: _jsx(X, { size: 16 }) }))] }), variant === "player" && (_jsxs(_Fragment, { children: [_jsxs("div", { className: "px-3 py-3 border-b border-gray-100 shrink-0 space-y-2", children: [_jsxs("form", { onSubmit: (e) => {
-                                    e.preventDefault();
-                                    void search(query);
-                                }, className: "relative", children: [_jsx(Search, { size: 14, className: "absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" }), _jsx("input", { ref: inputRef, value: query, onChange: (e) => setQuery(e.target.value), placeholder: t.chat.search_placeholder, className: "w-full pl-8 pr-10 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400" }), _jsx("button", { type: "submit", "aria-label": t.chat.search_gif, className: "absolute right-2 top-1/2 -translate-y-1/2 p-1 text-brand-600 hover:text-brand-800", children: _jsx(Send, { size: 14 }) })] }), _jsx("input", { value: caption, onChange: (e) => setCaption(e.target.value.slice(0, 60)), placeholder: t.chat.caption_placeholder, className: "w-full px-3 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400" })] }), _jsxs("div", { className: "overflow-y-auto flex-1 p-3", children: [loading && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: t.common.loading })), !loading && results.length === 0 && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: t.chat.search_hint })), _jsx("div", { className: "grid grid-cols-3 gap-1.5", children: results.map((gif) => (_jsx("button", { onClick: () => sendGif(gif), "aria-label": gif.title, className: "aspect-square rounded-xl overflow-hidden hover:ring-2 hover:ring-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400 transition-all active:scale-95", children: _jsx("img", { src: gif.url, alt: gif.title, className: "w-full h-full object-cover", loading: "lazy" }) }, gif.id))) })] })] })), reactions.length > 0 ? (_jsx("div", { className: `shrink-0 overflow-y-auto space-y-3 ${variant === "player" ? "border-t border-gray-100 max-h-40 px-3 py-3" : "flex-1 px-1 py-1"}`, children: reactions
+                : "w-full h-full border-0 shadow-none",
+        ].join(" "), children: [_jsxs("div", { className: "flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0", children: [_jsx("span", { className: "font-semibold text-gray-800 text-sm", children: variant === "player" ? t.chat.search_gif : "GIF feed" }), variant === "player" && (_jsx("button", { onClick: () => setOpen(false), "aria-label": "Close", className: "p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100", children: _jsx(X, { size: 16 }) }))] }), variant === "player" && (_jsxs(_Fragment, { children: [_jsx("div", { className: "px-3 py-2 border-b border-gray-100 shrink-0", children: _jsxs("form", { onSubmit: (e) => {
+                                e.preventDefault();
+                                void search(query);
+                            }, className: "relative", children: [_jsx(Search, { size: 14, className: "absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" }), _jsx("input", { ref: inputRef, value: query, onChange: (e) => setQuery(e.target.value), placeholder: t.chat.search_placeholder, className: "w-full pl-8 pr-10 py-2 text-sm rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-400" }), _jsx("button", { type: "submit", "aria-label": t.chat.search_gif, className: "absolute right-2 top-1/2 -translate-y-1/2 p-1 text-brand-600 hover:text-brand-800", children: _jsx(Send, { size: 14 }) })] }) }), _jsxs("div", { className: "overflow-y-auto flex-1 p-2", children: [loading && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: t.common.loading })), !loading && results.length === 0 && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: t.chat.search_hint })), _jsx("div", { className: "grid grid-cols-3 gap-1.5", children: results.map((gif) => (_jsx("button", { onClick: () => sendGif(gif), "aria-label": gif.title, className: "aspect-square rounded-xl overflow-hidden hover:ring-2 hover:ring-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-400 transition-all active:scale-95", children: _jsx("img", { src: gif.url, alt: gif.title, className: "w-full h-full object-cover", loading: "lazy" }) }, gif.id))) })] })] })), reactions.length > 0 ? (_jsx("div", { className: `px-3 py-2 shrink-0 overflow-y-auto space-y-2 ${variant === "player" ? "border-t border-gray-100 max-h-32" : "flex-1"}`, children: reactions
                     .slice()
                     .reverse()
                     .slice(0, variant === "player" ? 3 : 50)
-                    .map((r) => (_jsxs("div", { className: "flex items-start gap-3 text-sm text-gray-700 bg-gray-50 rounded-2xl p-3", children: [_jsx(PlayerAvatar, { value: r.avatarEmoji, name: r.displayName, size: "sm" }), _jsxs("div", { className: "min-w-0 flex-1 space-y-1", children: [_jsx("div", { className: "font-semibold truncate", children: r.displayName }), r.caption && _jsx("div", { className: "text-xs leading-5 text-gray-500 break-words", children: r.caption })] }), _jsx("img", { src: r.gifUrl, alt: r.caption, className: "h-16 w-16 rounded-xl object-cover shrink-0" })] }, r.id))) })) : (variant === "host" && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: t.chat.no_gifs })))] }, "panel"));
+                    .map((r) => (_jsxs("div", { className: "flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-xl p-2", children: [_jsx(PlayerAvatar, { value: r.avatarEmoji, name: r.displayName, size: "sm" }), _jsx("span", { className: "font-semibold truncate max-w-[80px]", children: r.displayName }), _jsx("img", { src: r.gifUrl, alt: r.caption, className: "h-10 rounded-lg object-cover ml-auto" })] }, r.id))) })) : (variant === "host" && (_jsx("p", { className: "text-center text-xs text-gray-400 py-4", children: "No GIFs sent yet" })))] }, "panel"));
     if (variant === "host") {
         return panel;
     }

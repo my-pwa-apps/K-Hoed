@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useReactionStore } from "@/stores/reactionStore";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -8,15 +7,8 @@ import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
  * Up to 4 are shown at once; each auto-dismisses after 6 s.
  */
 export function ReactionOverlay() {
-  const { reactions, pruneOld } = useReactionStore();
-
-  // Periodic cleanup
-  useEffect(() => {
-    const id = setInterval(pruneOld, 2000);
-    return () => clearInterval(id);
-  }, [pruneOld]);
-
-  const visible = reactions.slice(-4);
+  const reactions = useReactionStore((s) => s.reactions);
+  const visible = reactions.filter((r) => Date.now() - r.receivedAt < 8_000).slice(-4);
 
   return (
     <div className="pointer-events-none fixed bottom-8 right-6 flex flex-col-reverse gap-3 z-50">
@@ -35,11 +27,18 @@ export function ReactionOverlay() {
               <PlayerAvatar value={r.avatarEmoji} name={r.displayName} size="xs" />
               <span className="font-semibold max-w-[80px] truncate">{r.displayName}</span>
             </div>
-            <img
-              src={r.gifUrl}
-              alt={r.caption ?? ""}
-              className="w-32 h-32 rounded-2xl object-cover shadow-xl border-2 border-white/20"
-            />
+            <div className="rounded-2xl overflow-hidden shadow-xl border-2 border-white/20 bg-black/40">
+              <img
+                src={r.gifUrl}
+                alt={r.caption ?? ""}
+                className="w-32 h-32 object-cover"
+              />
+              {r.caption && (
+                <div className="max-w-32 px-2 py-1 text-[11px] leading-4 text-white/90 break-words">
+                  {r.caption}
+                </div>
+              )}
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>
